@@ -1,0 +1,133 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+
+export default function RegisterPage() {
+  const router = useRouter();
+
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const u = username.trim();
+    if (u.length < 3) {
+      setErrorMsg("Username must be at least 3 characters.");
+      return;
+    }
+
+    setLoading(true);
+
+    // 1) Sign up
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      setLoading(false);
+      setErrorMsg(error.message);
+      return;
+    }
+
+    // Not: Email confirmation açıksa user hemen session dönmeyebilir.
+    // Yine de user id çoğu durumda gelir.
+    const userId = data.user?.id;
+
+    if (userId) {
+      // 2) profiles.username set et (trigger profiles satırı açmıştı, biz update ediyoruz)
+      const { error: upErr } = await supabase
+        .from("profiles")
+        .update({ username: u })
+        .eq("id", userId);
+
+      if (upErr) {
+        setLoading(false);
+        setErrorMsg(upErr.message);
+        return;
+      }
+    }
+
+    setLoading(false);
+
+    // Email confirmation kapalıysa direkt login olmuş olur -> dashboard
+    // Açıksa kullanıcıya mail onayı yaptırıp login sayfasına da atabilirsin.
+    router.push("/dashboard");
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
+        <h1 className="text-2xl font-semibold">Register</h1>
+        <p className="mt-1 text-sm text-zinc-400">Create your account.</p>
+
+        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-zinc-300">Username</label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 outline-none focus:border-white/20"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="hedimax"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-zinc-300">Email</label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 outline-none focus:border-white/20"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-zinc-300">Password</label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 outline-none focus:border-white/20"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          {errorMsg ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {errorMsg}
+            </div>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-white text-zinc-950 py-2 font-medium hover:bg-zinc-200 disabled:opacity-60"
+          >
+            {loading ? "Creating..." : "Create account"}
+          </button>
+        </form>
+
+        <div className="mt-4 text-sm text-zinc-400">
+          Already have an account?{" "}
+          <Link href="/login" className="text-zinc-200 underline">
+            Sign In
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
