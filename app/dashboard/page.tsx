@@ -276,3 +276,91 @@ export default function DashboardPage() {
     </main>
   );
 }
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
+export default function DashboardPage() {
+  const [balance, setBalance] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string>("");
+
+  async function loadBalance() {
+    const { data, error } = await supabase
+      .from("points_balance")
+      .select("balance")
+      .single();
+
+    if (error) {
+      // kullanıcı daha hiç puan almadıysa points_balance satırı olmayabilir
+      setBalance(0);
+      return;
+    }
+
+    setBalance(data?.balance ?? 0);
+  }
+
+  useEffect(() => {
+    loadBalance();
+  }, []);
+
+  async function addTestPoints() {
+    setMsg("");
+    setLoading(true);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      setMsg("No session. Please sign in.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetch("/api/points/claim", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        amount: 50,
+        ref: `test_${Date.now()}`, // aynı ref tekrar edilirse 2. kez puan yazmaz
+        reason: "task_complete",
+      }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json.error || "Failed");
+      setLoading(false);
+      return;
+    }
+
+    setMsg("✅ +50 points added");
+    await loadBalance(); // 5. adımın mantığı: yeni bakiyeyi tekrar çek
+    setLoading(false);
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 max-w-md">
+        <div className="text-sm text-zinc-400">Your points</div>
+        <div className="mt-1 text-4xl font-bold">{balance}</div>
+
+        <button
+          onClick={addTestPoints}
+          disabled={loading}
+          className="mt-4 w-full rounded-xl bg-white text-zinc-950 py-2 font-medium disabled:opacity-60"
+        >
+          {loading ? "Adding..." : "Test: Add +50 points"}
+        </button>
+
+        {msg ? <div className="mt-3 text-sm text-zinc-300">{msg}</div> : null}
+      </div>
+    </div>
+  );
+}
