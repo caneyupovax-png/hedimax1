@@ -1,3 +1,10 @@
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  return NextResponse.json(
+    { error: "Missing SUPABASE_SERVICE_ROLE_KEY" },
+    { status: 500 }
+  );
+}
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
