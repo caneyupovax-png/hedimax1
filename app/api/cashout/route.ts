@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function supabaseAnon() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, anon);
-}
+import { cookies } from "next/headers";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
 const ALLOWED = new Set(["BTC", "LTC", "DOGE"]);
 
 export async function POST(req: Request) {
   try {
-    const supabase = supabaseAnon();
+    // ✅ Bu client kullanıcı session cookie’sini okur
+    const supabase = createRouteHandlerClient({ cookies });
 
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !authData?.user) {
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -34,7 +30,7 @@ export async function POST(req: Request) {
     }
 
     const { error } = await supabase.from("withdrawals").insert({
-      user_id: authData.user.id,
+      user_id: userData.user.id,
       coin,
       address,
       amount: amountNum,
