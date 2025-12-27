@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,30 +6,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
+  const [password2, setPassword2] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
 
-  // ✅ Login sayfasına girince: session varsa dashboard'a gönder
-  // (getUser yerine getSession kullanıyoruz -> logout sonrası yanlış yönlendirme azalır)
+  // Eğer login olmuşsa dashboard'a at
   useEffect(() => {
     let alive = true;
-
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!alive) return;
-
-      if (data?.session) {
-        router.replace("/dashboard");
-      }
+      if (data?.session) router.replace("/dashboard");
     })();
-
     return () => {
       alive = false;
     };
@@ -39,12 +34,30 @@ export default function LoginPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    setLoading(true);
+    setOk(null);
 
+    if (password.length < 6) {
+      setMsg("Password must be at least 6 characters.");
+      return;
+    }
+    if (password !== password2) {
+      setMsg("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        // Email confirmation açıksa Supabase mail atar.
+        // Kapalıysa direkt session dönebilir.
+        options: {
+          emailRedirectTo:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/dashboard`
+              : undefined,
+        },
       });
 
       if (error) {
@@ -53,13 +66,18 @@ export default function LoginPage() {
         return;
       }
 
-      // remember me: supabase session cookie ile yönetilir.
-      // UI checkbox şimdilik sadece görünüm (istersen sonra gerçek davranış ekleriz).
+      // Eğer confirmation açıksa user oluşturulur ama session gelmeyebilir:
+      if (!data.session) {
+        setOk("Account created. Please check your email to confirm your account.");
+        setLoading(false);
+        return;
+      }
 
+      // Confirmation kapalıysa direkt giriş yapar:
       router.replace("/dashboard");
       router.refresh();
     } catch (err: any) {
-      setMsg(err?.message ?? "Login failed.");
+      setMsg(err?.message ?? "Register failed.");
       setLoading(false);
     }
   }
@@ -79,7 +97,7 @@ export default function LoginPage() {
       {/* Modal */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
         <div className="relative w-full max-w-[520px] rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-8 shadow-2xl backdrop-blur-xl">
-          {/* Close button */}
+          {/* Close */}
           <button
             onClick={() => router.push("/")}
             aria-label="Close"
@@ -91,25 +109,19 @@ export default function LoginPage() {
           {/* Brand */}
           <div className="mb-8 flex items-center gap-3">
             <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-white/10 bg-white/5">
-              <Image
-                src="/logo.png"
-                alt="Hedimax"
-                fill
-                className="object-contain p-1"
-                priority
-              />
+              <Image src="/logo.png" alt="Hedimax" fill className="object-contain p-1" priority />
             </div>
             <div className="leading-tight">
               <div className="text-lg font-semibold tracking-tight">Hedimax</div>
-              <div className="text-xs text-white/60">Earn rewards. Cash out fast.</div>
+              <div className="text-xs text-white/60">Create your account</div>
             </div>
           </div>
 
-          <h1 className="text-4xl font-semibold tracking-tight">Sign In</h1>
+          <h1 className="text-4xl font-semibold tracking-tight">Register</h1>
           <p className="mt-2 text-sm text-white/70">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-emerald-300 hover:text-emerald-200">
-              Register
+            Already have an account?{" "}
+            <Link href="/login" className="text-emerald-300 hover:text-emerald-200">
+              Sign in
             </Link>
           </p>
 
@@ -137,48 +149,31 @@ export default function LoginPage() {
                 type="password"
                 placeholder="••••••••"
                 className="h-12 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-white placeholder:text-white/40 outline-none transition focus:border-emerald-400/50 focus:bg-white/12"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
               />
             </div>
 
-            {/* Remember + Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-white/70">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-white/10 accent-emerald-400"
-                />
-                Remember me
-              </label>
-
-              <Link
-                href="/forgot-password"
-                className="text-sm text-emerald-300 hover:text-emerald-200"
-              >
-                Forgot password?
-              </Link>
+            {/* Confirm Password */}
+            <div className="space-y-2">
+              <label className="text-sm text-white/80">Confirm password</label>
+              <input
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+                type="password"
+                placeholder="••••••••"
+                className="h-12 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-white placeholder:text-white/40 outline-none transition focus:border-emerald-400/50 focus:bg-white/12"
+                autoComplete="new-password"
+                required
+              />
             </div>
 
-            {/* Captcha placeholder */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500/20 text-emerald-200">
-                  ✓
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Verified</div>
-                  <div className="text-xs text-white/60">
-                    (placeholder) Turnstile / reCAPTCHA can go here
-                  </div>
-                </div>
-                <div className="text-xs text-white/40">Hedimax</div>
+            {/* OK / Error */}
+            {ok && (
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                {ok}
               </div>
-            </div>
-
-            {/* Error */}
+            )}
             {msg && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                 {msg}
@@ -191,12 +186,11 @@ export default function LoginPage() {
               disabled={loading}
               className="h-12 w-full rounded-xl bg-emerald-400 text-black font-semibold shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Logging in..." : "Log in"}
+              {loading ? "Creating..." : "Create account"}
             </button>
 
-            {/* Bottom */}
             <p className="text-center text-xs text-white/45">
-              By continuing you agree to our{" "}
+              By creating an account you agree to our{" "}
               <Link href="/terms" className="text-white/70 hover:text-white">
                 Terms
               </Link>{" "}

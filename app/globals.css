@@ -24,3 +24,62 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+@layer utilities {
+  /* App background (green themed) */
+  .bg-app {
+    background:
+      radial-gradient(900px 420px at 20% 10%, rgba(16, 185, 129, .22), transparent 60%),
+      radial-gradient(900px 420px at 80% 20%, rgba(34, 197, 94, .18), transparent 60%),
+      linear-gradient(180deg, #07130d 0%, #050a08 100%);
+  }
+
+  .text-app { color: rgba(255,255,255,.92); }
+  .text-muted { color: rgba(255,255,255,.62); }
+
+  .card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 1rem; /* 16px */
+  }
+
+  .card-strong {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(16,185,129,.22);
+    border-radius: 1rem;
+  }
+
+  .btn {
+    border-radius: .9rem;
+    padding: .6rem 1rem;
+    font-size: .9rem;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05);
+  }
+  .btn:hover { background: rgba(255,255,255,.08); }
+
+  .btn-primary {
+    border-radius: .9rem;
+    padding: .6rem 1rem;
+    font-size: .9rem;
+    font-weight: 600;
+    color: #04110a;
+    background: linear-gradient(90deg, #22c55e 0%, #10b981 100%);
+    border: 1px solid rgba(16,185,129,.35);
+  }
+  .btn-primary:hover { filter: brightness(1.05); }
+
+  .pill {
+    border-radius: 9999px;
+    padding: .15rem .55rem;
+    font-size: .75rem;
+    border: 1px solid rgba(16,185,129,.25);
+    background: rgba(16,185,129,.12);
+    color: rgba(209,250,229,.95);
+  }
+
+  .nav-glass {
+    background: rgba(0,0,0,.25);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+  }
+}
