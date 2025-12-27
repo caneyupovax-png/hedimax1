@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 const COINS = [
   { key: "BTC", label: "Bitcoin (BTC)" },
@@ -9,9 +10,16 @@ const COINS = [
 ] as const;
 
 export default function CashoutPage() {
+  const supabase = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    return createClient(url, anon);
+  }, []);
+
   const [coin, setCoin] = useState<(typeof COINS)[number]["key"]>("BTC");
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState<string>("");
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -21,16 +29,29 @@ export default function CashoutPage() {
     setMsg(null);
     setErr(null);
 
+    const addr = address.trim();
     const amt = Number(amount);
-    if (!address.trim()) return setErr("Address required.");
-    if (!Number.isFinite(amt) || amt <= 0) return setErr("Amount must be > 0.");
+
+    if (!addr || addr.length < 8) return setErr("Please enter a valid address.");
+    if (!Number.isFinite(amt) || amt <= 0) return setErr("Amount must be greater than 0.");
 
     setLoading(true);
     try {
+      // ✅ Token'ı client session'dan al
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data?.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("You are not logged in. Please login again.");
+      }
+
       const res = await fetch("/api/cashout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coin, address, amount: amt }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ coin, address: addr, amount: amt }),
       });
 
       const json = await res.json().catch(() => ({}));
@@ -65,7 +86,7 @@ export default function CashoutPage() {
                     type="button"
                     onClick={() => setCoin(c.key)}
                     className={[
-                      "rounded-xl border px-4 py-3 text-sm text-left",
+                      "rounded-xl border px-4 py-3 text-sm text-left transition",
                       coin === c.key
                         ? "border-white/40 bg-white/10"
                         : "border-white/10 bg-black/20 hover:border-white/20",
@@ -86,6 +107,7 @@ export default function CashoutPage() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder={`Enter your ${coin} address`}
+                autoComplete="off"
               />
               <div className="mt-1 text-xs text-white/50">
                 Make sure the address matches the selected coin network.
