@@ -1,212 +1,89 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
+import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createClient();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
-  // ✅ Login sayfasına girince: session varsa dashboard'a gönder
-  // (getUser yerine getSession kullanıyoruz -> logout sonrası yanlış yönlendirme azalır)
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!alive) return;
-
-      if (data?.session) {
-        router.replace("/dashboard");
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function onSubmit(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
+    setError("");
     setLoading(true);
 
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      if (error) {
-        setMsg(error.message);
-        setLoading(false);
-        return;
-      }
-
-      // remember me: supabase session cookie ile yönetilir.
-      // UI checkbox şimdilik sadece görünüm (istersen sonra gerçek davranış ekleriz).
-
-      router.replace("/dashboard");
-      router.refresh();
-    } catch (err: any) {
-      setMsg(err?.message ?? "Login failed.");
+    if (error) {
+      setError(error.message);
       setLoading(false);
+      return;
     }
+
+    router.push("/dashboard");
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-emerald-950 via-slate-950 to-black text-white">
-      {/* soft blobs */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-emerald-500/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-[520px] w-[520px] rounded-full bg-emerald-400/10 blur-3xl" />
-
-      {/* background dim/blur */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-black/55" />
-        <div className="absolute inset-0 backdrop-blur-[2px]" />
-      </div>
-
-      {/* Modal */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
-        <div className="relative w-full max-w-[520px] rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-8 shadow-2xl backdrop-blur-xl">
-          {/* Close button */}
-          <button
-            onClick={() => router.push("/")}
-            aria-label="Close"
-            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/20 text-white/80 hover:bg-black/30 hover:text-white transition"
-          >
-            ✕
-          </button>
-
-          {/* Brand */}
-          <div className="mb-8 flex items-center gap-3">
-            <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-white/10 bg-white/5">
-              <Image
-                src="/logo.png"
-                alt="Hedimax"
-                fill
-                className="object-contain p-1"
-                priority
-              />
-            </div>
-            <div className="leading-tight">
-              <div className="text-lg font-semibold tracking-tight">Hedimax</div>
-              <div className="text-xs text-white/60">Earn rewards. Cash out fast.</div>
-            </div>
-          </div>
-
-          <h1 className="text-4xl font-semibold tracking-tight">Sign In</h1>
-          <p className="mt-2 text-sm text-white/70">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-emerald-300 hover:text-emerald-200">
-              Register
-            </Link>
+    <div className="min-h-screen bg-[#070a0f] text-white flex items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+        {/* Header */}
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-semibold">Sign in to Hedimax</h1>
+          <p className="mt-2 text-sm text-white/60">
+            Welcome back. Please enter your details.
           </p>
+        </div>
 
-          <form onSubmit={onSubmit} className="mt-8 space-y-5">
-            {/* Email */}
-            <div className="space-y-2">
-              <label className="text-sm text-white/80">Email</label>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                type="email"
-                placeholder="you@example.com"
-                className="h-12 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-white placeholder:text-white/40 outline-none transition focus:border-emerald-400/50 focus:bg-white/12"
-                autoComplete="email"
-                required
-              />
-            </div>
+        {/* Form */}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-emerald-400"
+          />
 
-            {/* Password */}
-            <div className="space-y-2">
-              <label className="text-sm text-white/80">Password</label>
-              <input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type="password"
-                placeholder="••••••••"
-                className="h-12 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-white placeholder:text-white/40 outline-none transition focus:border-emerald-400/50 focus:bg-white/12"
-                autoComplete="current-password"
-                required
-              />
-            </div>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-emerald-400"
+          />
 
-            {/* Remember + Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-white/70">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-white/10 accent-emerald-400"
-                />
-                Remember me
-              </label>
+          {error ? (
+            <div className="text-sm text-red-400">{error}</div>
+          ) : null}
 
-              <Link
-                href="/forgot-password"
-                className="text-sm text-emerald-300 hover:text-emerald-200"
-              >
-                Forgot password?
-              </Link>
-            </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-lime-500 py-3 font-bold text-[#06110b] hover:brightness-110 disabled:opacity-60"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
 
-            {/* Captcha placeholder */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500/20 text-emerald-200">
-                  ✓
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Verified</div>
-                  <div className="text-xs text-white/60">
-                    (placeholder) Turnstile / reCAPTCHA can go here
-                  </div>
-                </div>
-                <div className="text-xs text-white/40">Hedimax</div>
-              </div>
-            </div>
+        {/* Links */}
+        <div className="mt-4 flex items-center justify-between text-sm text-white/60">
+          <Link href="/forgot-password" className="hover:text-white">
+            Forgot password?
+          </Link>
 
-            {/* Error */}
-            {msg && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                {msg}
-              </div>
-            )}
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-12 w-full rounded-xl bg-emerald-400 text-black font-semibold shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Logging in..." : "Log in"}
-            </button>
-
-            {/* Bottom */}
-            <p className="text-center text-xs text-white/45">
-              By continuing you agree to our{" "}
-              <Link href="/terms" className="text-white/70 hover:text-white">
-                Terms
-              </Link>{" "}
-              &{" "}
-              <Link href="/privacy" className="text-white/70 hover:text-white">
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </form>
+          <Link href="/register" className="hover:text-white">
+            Create account
+          </Link>
         </div>
       </div>
     </div>
