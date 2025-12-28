@@ -1,39 +1,41 @@
-const auth = req.headers.get("authorization") || "";
-if (!auth) return NextResponse.json({ error: "Unauthorized: missing token" }, { status: 401 });
-if (!auth.toLowerCase().startsWith("bearer ")) return NextResponse.json({ error: "Unauthorized: bad auth header" }, { status: 401 });
-
 // app/api/cashout/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export const runtime = "nodejs"; // prod/edge farkını elimine etmek için
+export const runtime = "nodejs";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY =
   process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Admin client sadece token doğrulamak için (RLS bypass etmemek için işlemde kullanmıyoruz)
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 export async function POST(req: Request) {
   try {
-    // 0) ENV kontrolü (Vercel’de yanlış env çok yaygın)
+    // ENV kontrol
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       return NextResponse.json(
-        {
-          error:
-            "Server misconfigured: missing SUPABASE_URL / SUPABASE_ANON_KEY",
-        },
+        { error: "Server misconfigured: missing Supabase env" },
         { status: 500 }
       );
     }
 
-    // 1) Authorization header’dan Bearer token çek
+    // Authorization header kontrol
     const auth = req.headers.get("authorization") || "";
-    const match = auth.match(/^Bearer\s+(.+)$/i);
-    const token = match?.[1];
+    if (!auth) {
+      return NextResponse.json(
+        { error: "Unauthorized: missing token" },
+        { status: 401 }
+      );
+    }
 
+    if (!auth.toLowerCase().startsWith("bearer ")) {
+      return NextResponse.json(
+        { error: "Unauthorized: bad auth header" },
+        { status: 401 }
+      );
+    }
+
+    const token = auth.slice("Bearer ".length).trim();
     if (!token) {
       return NextResponse.json(
         { error: "Unauthorized: missing token" },
@@ -41,36 +43,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) Token geçerli mi? (Invalid token ayrımı)
-    // Service role varsa: auth.getUser(token) ile doğrula.
-    // Yoksa: anon client ile de doğrulayabiliriz (çoğu projede çalışır).
-    if (SUPABASE_SERVICE_ROLE_KEY) {
-      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-
-      const { data, error } = await admin.auth.getUser(token);
-      if (error || !data?.user) {
-        return NextResponse.json(
-          { error: "Unauthorized: invalid token" },
-          { status: 401 }
-        );
-      }
-    } else {
-      // Service role yoksa fallback doğrulama (daha zayıf ama ayrım için yeterli)
-      const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-      const { data, error } = await anon.auth.getUser(token);
-      if (error || !data?.user) {
-        return NextResponse.json(
-          { error: "Unauthorized: invalid token" },
-          { status: 401 }
-        );
-      }
-    }
-
-    // 3) Body al
+    // Body
     const body = await req.json().catch(() => null);
     const { coin, address, amount } = body || {};
 
@@ -81,7 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 4) Authed Supabase client: token’ı global header ile geçir
+    // Authed client (user token ile)
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: {
@@ -91,7 +64,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // 5) RPC çağır
     const { data, error } = await supabase.rpc("request_withdrawal", {
       p_coin: coin,
       p_address: address,
@@ -99,7 +71,6 @@ export async function POST(req: Request) {
     });
 
     if (error) {
-      // Buraya düşerse artık "token yok/invalid" değil → genelde RLS/policy veya function error
       return NextResponse.json(
         {
           error: error.message,
