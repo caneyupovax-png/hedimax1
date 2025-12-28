@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     }
 
     const auth = req.headers.get("authorization") || "";
+
     if (!auth) {
       return NextResponse.json(
         { error: "Unauthorized: missing token" },
@@ -64,12 +65,7 @@ export async function POST(req: Request) {
 
     if (error) {
       return NextResponse.json(
-        {
-          error: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-        },
+        { error: error.message, code: error.code, details: error.details },
         { status: 400 }
       );
     }
