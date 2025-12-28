@@ -18,14 +18,14 @@ export default function CashoutPage() {
     setLoading(true);
 
     try {
-      // 🔹 USER KONTROLÜ (en sağlam yol)
+      // 🔐 Kullanıcı var mı
       const { data: userRes } = await supabase.auth.getUser();
       if (!userRes?.user) {
         setMsg("Giriş yapman gerekiyor");
         return;
       }
 
-      // 🔹 SESSION + TOKEN
+      // 🔑 Session + token
       const { data: sessionRes } = await supabase.auth.getSession();
       const token = sessionRes?.session?.access_token;
 
@@ -34,6 +34,7 @@ export default function CashoutPage() {
         return;
       }
 
+      // 🚀 API çağrısı (coin LOWERCASE → invalid coin fix)
       const res = await fetch("/api/cashout", {
         method: "POST",
         headers: {
@@ -41,9 +42,9 @@ export default function CashoutPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          coin,
-          address,
-          amount,
+          coin: coin.toLowerCase(), // ✅ EN ÖNEMLİ FIX
+          address: address.trim(),
+          amount: Number(amount),
         }),
       });
 
@@ -57,7 +58,7 @@ export default function CashoutPage() {
       setMsg("Çekim talebi alındı ✅");
       setAddress("");
       setAmount(0);
-    } catch (e) {
+    } catch {
       setMsg("Bir hata oluştu");
     } finally {
       setLoading(false);
@@ -69,7 +70,10 @@ export default function CashoutPage() {
       <h1>Cashout</h1>
 
       <label>Coin</label>
-      <select value={coin} onChange={(e) => setCoin(e.target.value)}>
+      <select
+        value={coin}
+        onChange={(e) => setCoin(e.target.value)}
+      >
         <option value="USDT">USDT</option>
         <option value="BTC">BTC</option>
         <option value="ETH">ETH</option>
@@ -99,7 +103,11 @@ export default function CashoutPage() {
         {loading ? "Gönderiliyor..." : "Çekim Yap"}
       </button>
 
-      {msg && <p style={{ marginTop: 10 }}>{msg}</p>}
+      {msg && (
+        <p style={{ marginTop: 12 }}>
+          {msg}
+        </p>
+      )}
     </div>
   );
 }
