@@ -1,209 +1,154 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@supabase/supabase-js";
 
-const OFFERWALLS: Array<{
-  name: string;
-  slug: string;
-  external?: boolean; // CPX gibi dış link açanlar
-}> = [
-  { name: "CPX Research", slug: "cpx", external: true },
-  { name: "AyetStudios", slug: "ayetstudios" },
-  { name: "AdGate", slug: "adgate" },
-  { name: "Lootably", slug: "lootably" },
-  { name: "BitLabs", slug: "bitlabs" },
-];
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+type ApiResp =
+  | { ok: true; offerwall_url?: string; url?: string }
+  | { ok: false; error?: string };
 
 export default function EarnPage() {
-  const router = useRouter();
-  const supabase = createClient();
+  const [userId, setUserId] = useState("");
+  const [loadingUser, setLoadingUser] = useState(true);
 
-  const [loading, setLoading] = useState(true);
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [username, setUsername] = useState("Guest");
-  const [balance, setBalance] = useState(0);
+  const [offerwallUrl, setOfferwallUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
+  const supabase =
+    SUPABASE_URL && SUPABASE_ANON
+      ? createClient(SUPABASE_URL, SUPABASE_ANON)
+      : null;
+
+  // 1) userId çek
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
 
-    const load = async () => {
-      setLoading(true);
+    (async () => {
+      try {
+        if (!supabase) {
+          throw new Error(
+            "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          );
+        }
 
-      const { data } = await supabase.auth.getSession();
-      const session = data.session;
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
 
-      if (!alive) return;
-
-      if (!session?.user) {
-        setIsAuthed(false);
-        setUsername("Guest");
-        setBalance(0);
-        setLoading(false);
-        return;
+        if (!cancelled) setUserId(data?.user?.id || "");
+      } catch (e: any) {
+        if (!cancelled) setErr(e?.message || "Failed to get user");
+      } finally {
+        if (!cancelled) setLoadingUser(false);
       }
-
-      setIsAuthed(true);
-
-      const u: any = session.user;
-      const name =
-        u?.user_metadata?.username ||
-        u?.user_metadata?.name ||
-        (u?.email ? String(u.email).split("@")[0] : "User");
-
-      setUsername(String(name));
-
-      const { data: pb } = await supabase
-        .from("points_balance")
-        .select("balance")
-        .eq("user_id", u.id)
-        .single();
-
-      setBalance(Number(pb?.balance ?? 0));
-      setLoading(false);
-    };
-
-    load();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      load();
-    });
+    })();
 
     return () => {
-      alive = false;
-      sub.subscription.unsubscribe();
+      cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const openOfferwall = async (slug: string) => {
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
+  // 2) offerwall link çek
+  useEffect(() => {
+    if (!userId) return;
 
-    if (!session?.user) {
-      router.push(`/login?next=/earn`);
-      return;
-    }
+    let cancelled = false;
 
-    // ✅ CPX: API'den URL al, yeni sekmede aç
-    if (slug === "cpx") {
-      const userId = session.user.id;
+    (async () => {
+      setLoading(true);
+      setErr("");
 
       try {
         const res = await fetch(
           `/api/offerwall/cpx?user_id=${encodeURIComponent(userId)}`,
           { cache: "no-store" }
         );
-        const json = await res.json();
 
-        if (!res.ok || !json?.ok || !json?.url) {
-          alert(json?.error || "Failed to open CPX Offerwall");
-          return;
+        const json: ApiResp = await res.json().catch(() => ({ ok: false }));
+
+        if (!res.ok || !("ok" in json) || json.ok === false) {
+          const msg =
+            (json as any)?.error ||
+            `HTTP ${res.status} (${res.statusText || "error"})`;
+          throw new Error(`CPX error: ${msg}`);
         }
 
-        window.open(json.url, "_blank", "noopener,noreferrer");
-        return;
-      } catch {
-        alert("Failed to open CPX Offerwall");
-        return;
-      }
-    }
+        const url = (json as any).offerwall_url || (json as any).url || "";
+        if (!url) throw new Error("CPX error: missing offerwall_url in response");
 
-    // diğer offerwall sayfaları
-    router.push(`/offerwall/${slug}`);
-  };
+        if (!cancelled) setOfferwallUrl(url);
+      } catch (e: any) {
+        if (!cancelled) setErr(e?.message || "Failed to load offerwall link");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-white/80">
+        Loading user...
+      </div>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-white/80">
+        Please sign in.
+      </div>
+    );
+  }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      {/* Guest banner */}
-      {!isAuthed && (
-        <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-          <div className="text-lg font-semibold">You’re browsing as Guest</div>
-          <div className="mt-1 text-sm text-white/70">
-            Login to track points and open offerwalls.
-          </div>
-          <div className="mt-4">
-            <Link
-              href="/login?next=/earn"
-              className="inline-flex rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
-            >
-              Login
-            </Link>
-          </div>
+    <main className="mx-auto w-full max-w-3xl px-4 py-10">
+      <h1 className="text-2xl font-semibold text-white">Earn</h1>
+      <p className="mt-2 text-white/60">
+        Open CPX Offerwall to complete surveys.
+      </p>
+
+      {err ? (
+        <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 whitespace-pre-wrap">
+          {err}
         </div>
-      )}
+      ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* LEFT */}
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="text-sm text-white/60">Welcome</div>
-          <div className="mt-1 text-2xl font-semibold">
-            Hi, <span className="text-emerald-400">{username}</span>
-          </div>
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+        {loading ? (
+          <div className="text-white/70">Loading offerwall link...</div>
+        ) : offerwallUrl ? (
+          // ✅ Popup blocker yok: a etiketi
+          <a
+            href={offerwallUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex w-full items-center justify-center rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 px-4 py-4 text-white"
+          >
+            Open CPX Offerwall →
+          </a>
+        ) : (
+          <div className="text-white/70">Offerwall link not ready.</div>
+        )}
 
-          <div className="mt-6 text-sm text-white/60">Current balance</div>
-          <div className="mt-2 text-5xl font-bold">{loading ? "…" : balance}</div>
-          <div className="text-white/60">points</div>
+        <button
+          className="mt-4 w-full rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 px-4 py-3 text-white"
+          onClick={() => location.reload()}
+        >
+          Refresh
+        </button>
+      </div>
 
-          <div className="mt-6 text-xs text-white/50">
-            {isAuthed ? (
-              <>
-                Go to{" "}
-                <Link className="underline hover:text-white" href="/dashboard">
-                  dashboard
-                </Link>{" "}
-                to see details.
-              </>
-            ) : (
-              "Login to see your real balance and start earning."
-            )}
-          </div>
-
-          <div className="mt-5 text-xs text-white/40">
-            Rate: <span className="text-white/70">1 USD = 1000 coins</span>
-          </div>
-        </section>
-
-        {/* RIGHT */}
-        <section className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div>
-            <div className="text-lg font-semibold">Offerwalls</div>
-            <div className="text-sm text-white/60">
-              Choose an offerwall to start earning points.
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {OFFERWALLS.map((o) => (
-              <button
-                key={o.slug}
-                onClick={() => openOfferwall(o.slug)}
-                className="block w-full text-left rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-white/20 transition"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-base font-semibold">{o.name}</div>
-                  {o.slug === "cpx" && (
-                    <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/20">
-                      Recommended
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-1 text-sm text-white/60">
-                  {o.slug === "cpx"
-                    ? "Open CPX surveys & offers (opens in new tab)"
-                    : `Open ${o.name} offerwall`}
-                </div>
-
-                <div className="mt-4 inline-flex rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">
-                  Open
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+      <div className="mt-4 text-xs text-white/50">
+        Debug: user_id = {userId}
       </div>
     </main>
   );
