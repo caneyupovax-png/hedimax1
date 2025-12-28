@@ -12,11 +12,8 @@ type Offer = {
   provider: "cpx";
 };
 
-// ✅ Client-side Supabase (ANON KEY ile)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export default function OfferwallPage() {
   const [userId, setUserId] = useState<string>("");
@@ -26,12 +23,24 @@ export default function OfferwallPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
 
+  // Supabase client sadece env varsa oluşturulsun
+  const supabase =
+    SUPABASE_URL && SUPABASE_ANON
+      ? createClient(SUPABASE_URL, SUPABASE_ANON)
+      : null;
+
   // 1) Kullanıcıyı çek
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
+        if (!supabase) {
+          throw new Error(
+            "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          );
+        }
+
         const { data, error } = await supabase.auth.getUser();
         if (error) throw error;
 
@@ -47,6 +56,7 @@ export default function OfferwallPage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2) Offerları çek
@@ -64,7 +74,8 @@ export default function OfferwallPage() {
           `/api/offerwall/cpx?user_id=${encodeURIComponent(userId)}`,
           { cache: "no-store" }
         );
-        const json = await res.json();
+
+        const json = await res.json().catch(() => ({}));
 
         if (!res.ok || !json?.ok) {
           throw new Error(json?.error || "Offerwall error");
@@ -96,4 +107,83 @@ export default function OfferwallPage() {
   if (!userId) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-white/80">
-        Please sign i
+        Please sign in.
+      </div>
+    );
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-5xl px-4 py-6">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Earn</h1>
+          <p className="text-white/60 text-sm">
+            Complete surveys to earn coins.
+          </p>
+        </div>
+
+        <button
+          className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 border border-white/10"
+          onClick={() => location.reload()}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {err ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
+          {err}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
+          Loading offers...
+        </div>
+      ) : null}
+
+      {!loading && !err && offers.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
+          No surveys available right now.
+        </div>
+      ) : null}
+
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {offers.map((offer) => {
+          const reward = Number.isFinite(offer.reward) ? offer.reward : 0;
+
+          return (
+            <button
+              key={`${offer.provider}-${offer.id}`}
+              className="text-left rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition"
+              onClick={() =>
+                window.open(offer.url, "_blank", "noopener,noreferrer")
+              }
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-white font-medium truncate">
+                    {offer.title}
+                  </div>
+
+                  <div className="mt-1 text-xs text-white/60">
+                    Provider: CPX
+                    {offer.duration ? ` • ${offer.duration} min` : ""}
+                  </div>
+                </div>
+
+                <div className="shrink-0 rounded-xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-1">
+                  <div className="text-yellow-200 font-semibold">
+                    {reward} Coins
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 text-sm text-white/70">Tap to start →</div>
+            </button>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
