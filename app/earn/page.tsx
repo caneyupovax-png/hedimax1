@@ -6,9 +6,13 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+type CpxResp =
+  | { ok: true; offerwall_url?: string; url?: string }
+  | { ok: false; error?: string };
+
 export default function EarnPage() {
-  const [userId, setUserId] = useState("");
-  const [userLoading, setUserLoading] = useState(true);
+  const [userId, setUserId] = useState<string>("");
+  const [authReady, setAuthReady] = useState(false);
 
   const [offerwallUrl, setOfferwallUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +23,7 @@ export default function EarnPage() {
       ? createClient(SUPABASE_URL, SUPABASE_ANON)
       : null;
 
-  // 🔹 Kullanıcıyı al
+  // ✅ Auth: session var mı? yoksa hata verme, user yok de.
   useEffect(() => {
     let cancelled = false;
 
@@ -31,14 +35,28 @@ export default function EarnPage() {
           );
         }
 
-        const { data, error } = await supabase.auth.getUser();
-        if (error) throw error;
+        // session varsa user al
+        const { data } = await supabase.auth.getSession();
+        const session = data.session;
 
-        if (!cancelled) setUserId(data?.user?.id || "");
+        if (!cancelled) {
+          setUserId(session?.user?.id || "");
+          setAuthReady(true);
+        }
+
+        // session değişirse güncelle
+        const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+          setUserId(sess?.user?.id || "");
+        });
+
+        return () => {
+          sub.subscription.unsubscribe();
+        };
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to get user");
-      } finally {
-        if (!cancelled) setUserLoading(false);
+        if (!cancelled) {
+          setError(e?.message || "Auth error");
+          setAuthReady(true);
+        }
       }
     })();
 
@@ -47,7 +65,7 @@ export default function EarnPage() {
     };
   }, []);
 
-  // 🔹 CPX Offerwall linkini al
+  // CPX link al
   useEffect(() => {
     if (!userId) return;
 
@@ -63,18 +81,14 @@ export default function EarnPage() {
           { cache: "no-store" }
         );
 
-        const json = await res.json().catch(() => ({}));
+        const json: CpxResp = await res.json().catch(() => ({ ok: false }));
 
-        if (!res.ok || json?.ok !== true) {
-          throw new Error(
-            json?.error || `CPX error: HTTP ${res.status}`
-          );
+        if (!res.ok || (json as any)?.ok !== true) {
+          throw new Error((json as any)?.error || `CPX error: HTTP ${res.status}`);
         }
 
-        const url = json.offerwall_url || json.url;
-        if (!url) {
-          throw new Error("CPX error: offerwall_url missing");
-        }
+        const url = (json as any).offerwall_url || (json as any).url || "";
+        if (!url) throw new Error("CPX error: offerwall_url missing");
 
         if (!cancelled) setOfferwallUrl(url);
       } catch (e: any) {
@@ -89,20 +103,28 @@ export default function EarnPage() {
     };
   }, [userId]);
 
-  // 🔻 Yükleniyor (user)
-  if (userLoading) {
+  if (!authReady) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Loading user...
+        Loading...
       </div>
     );
   }
 
-  // 🔻 Login yok
+  // ✅ Login yoksa normal mesaj (refresh token error basmayız)
   if (!userId) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Please sign in
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white px-4">
+        <div className="text-xl font-semibold">Please sign in</div>
+        <div className="mt-2 text-white/60 text-sm text-center">
+          Your session is missing or expired. Go to Login and sign in again.
+        </div>
+        <a
+          href="/login"
+          className="mt-6 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 px-4 py-3"
+        >
+          Go to Login →
+        </a>
       </div>
     );
   }
@@ -134,9 +156,7 @@ export default function EarnPage() {
               Open CPX Offerwall →
             </a>
           ) : (
-            <div className="text-white/60">
-              Offerwall link not available.
-            </div>
+            <div className="text-white/60">Offerwall link not available.</div>
           )}
 
           <button
