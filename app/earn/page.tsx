@@ -5,7 +5,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-const OFFERWALLS = [
+const OFFERWALLS: Array<{
+  name: string;
+  slug: string;
+  external?: boolean; // CPX gibi dış link açanlar
+}> = [
+  { name: "CPX Research", slug: "cpx", external: true },
   { name: "AyetStudios", slug: "ayetstudios" },
   { name: "AdGate", slug: "adgate" },
   { name: "Lootably", slug: "lootably" },
@@ -75,10 +80,38 @@ export default function EarnPage() {
 
   const openOfferwall = async (slug: string) => {
     const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      router.push(`/login?next=/offerwall/${slug}`);
+    const session = data.session;
+
+    if (!session?.user) {
+      router.push(`/login?next=/earn`);
       return;
     }
+
+    // ✅ CPX: API'den URL al, yeni sekmede aç
+    if (slug === "cpx") {
+      const userId = session.user.id;
+
+      try {
+        const res = await fetch(
+          `/api/offerwall/cpx?user_id=${encodeURIComponent(userId)}`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+
+        if (!res.ok || !json?.ok || !json?.url) {
+          alert(json?.error || "Failed to open CPX Offerwall");
+          return;
+        }
+
+        window.open(json.url, "_blank", "noopener,noreferrer");
+        return;
+      } catch {
+        alert("Failed to open CPX Offerwall");
+        return;
+      }
+    }
+
+    // diğer offerwall sayfaları
     router.push(`/offerwall/${slug}`);
   };
 
@@ -127,6 +160,10 @@ export default function EarnPage() {
               "Login to see your real balance and start earning."
             )}
           </div>
+
+          <div className="mt-5 text-xs text-white/40">
+            Rate: <span className="text-white/70">1 USD = 1000 coins</span>
+          </div>
         </section>
 
         {/* RIGHT */}
@@ -145,10 +182,21 @@ export default function EarnPage() {
                 onClick={() => openOfferwall(o.slug)}
                 className="block w-full text-left rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-white/20 transition"
               >
-                <div className="text-base font-semibold">{o.name}</div>
-                <div className="mt-1 text-sm text-white/60">
-                  Open {o.name} offerwall
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-base font-semibold">{o.name}</div>
+                  {o.slug === "cpx" && (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/20">
+                      Recommended
+                    </span>
+                  )}
                 </div>
+
+                <div className="mt-1 text-sm text-white/60">
+                  {o.slug === "cpx"
+                    ? "Open CPX surveys & offers (opens in new tab)"
+                    : `Open ${o.name} offerwall`}
+                </div>
+
                 <div className="mt-4 inline-flex rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">
                   Open
                 </div>
