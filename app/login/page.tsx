@@ -18,72 +18,60 @@ export default function LoginPage() {
     setMsg("");
     setLoading(true);
 
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      if (error) {
-        setMsg(error.message);
-        return;
-      }
-
-      // ✅ LOGIN OLDUKTAN SONRA ŞART
-      router.push("/cashout");
-    } catch {
-      setMsg("Bir hata oluştu");
-    } finally {
+    if (error) {
+      setMsg(error.message);
       setLoading(false);
+      return;
     }
+
+    router.push("/cashout");
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
+    <div className="flex min-h-screen items-center justify-center bg-black text-white">
       <form
         onSubmit={handleLogin}
-        style={{
-          width: 360,
-          padding: 24,
-          border: "1px solid #333",
-          borderRadius: 8,
-        }}
+        className="mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-black/40 p-6 backdrop-blur"
       >
-        <h1>Login</h1>
+        <h1 className="mb-6 text-center text-2xl font-semibold">
+          Login
+        </h1>
 
-        <label>Email</label>
+        <label className="text-sm text-white/70">Email</label>
         <input
+          className="mt-1 w-full rounded-xl border border-white/10 bg-black/60 p-3 text-white outline-none"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
 
-        <br /><br />
-
-        <label>Password</label>
+        <label className="mt-4 block text-sm text-white/70">
+          Password
+        </label>
         <input
+          className="mt-1 w-full rounded-xl border border-white/10 bg-black/60 p-3 text-white outline-none"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
 
-        <br /><br />
-
-        <button type="submit" disabled={loading}>
-          {loading ? "Giriş yapılıyor..." : "Login"}
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-6 w-full rounded-xl bg-white py-3 font-semibold text-black disabled:opacity-50"
+        >
+          {loading ? "Signing in..." : "Login"}
         </button>
 
         {msg && (
-          <p style={{ marginTop: 10, color: "red" }}>
+          <p className="mt-4 text-center text-sm text-red-400">
             {msg}
           </p>
         )}
