@@ -1,78 +1,36 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: { persistSession: false },
-    }
-  );
-}
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
-  req: Request,
-  { params }: { params: { provider: string } }
+  req: NextRequest,
+  context: { params: Promise<{ provider: string }> }
 ) {
+  const { provider } = await context.params;
+
   try {
-    const provider = params.provider || "test";
-
-    // JSON body (bozuk gelirse boş obje)
-    const body: any = await req.json().catch(() => ({}));
-
-    const user_id = body.user_id;
-    const tx_id = body.tx_id;
-    const amount = Number(body.amount ?? 0);
-
-    // VALIDATION
-    if (!tx_id) {
-      return NextResponse.json(
-        { ok: false, error: "tx_id required" },
-        { status: 400 }
-      );
+    // Body parse (bazı postbackler body göndermez)
+    let body: any = null;
+    const ct = req.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      body = await req.json().catch(() => null);
+    } else if (ct.includes("application/x-www-form-urlencoded")) {
+      const form = await req.formData().catch(() => null);
+      if (form) body = Object.fromEntries(form.entries());
+    } else {
+      // querystring gibi kullanmak istersen:
+      body = null;
     }
 
-    if (!user_id) {
-      return NextResponse.json(
-        { ok: false, error: "user_id required" },
-        { status: 400 }
-      );
-    }
+    const url = new URL(req.url);
+    const query = Object.fromEntries(url.searchParams.entries());
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "amount must be > 0" },
-        { status: 400 }
-      );
-    }
+    // TODO: burada provider'a göre parse/verify yapacaksın
+    // örnek: user_id, amount, txid vs
+    const payload = { provider, query, body };
 
-    // SUPABASE (SERVICE ROLE)
-    const supabase = getSupabaseAdmin();
-
-    const { data, error } = await supabase.rpc("apply_offerwall_event", {
-      p_provider: provider,
-      p_tx_id: tx_id,
-      p_user_id: user_id,
-      p_amount: amount,
-      p_raw: body,
-      p_signature_ok: true, // şimdilik test
-    });
-
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      result: data,
-    });
-  } catch (err: any) {
+    return NextResponse.json({ ok: true, result: payload });
+  } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: err?.message || "unknown error" },
+      { ok: false, error: error?.message ?? String(error) },
       { status: 500 }
     );
   }
