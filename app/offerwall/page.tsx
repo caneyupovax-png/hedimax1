@@ -9,6 +9,7 @@ type Offer = {
   reward: number;
   duration: number | null;
   url: string;
+  entry_url?: string;
   provider: "cpx";
 };
 
@@ -23,7 +24,6 @@ export default function OfferwallPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
 
-  // Supabase client sadece env varsa oluşturulsun
   const supabase =
     SUPABASE_URL && SUPABASE_ANON
       ? createClient(SUPABASE_URL, SUPABASE_ANON)
@@ -40,7 +40,6 @@ export default function OfferwallPage() {
             "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
           );
         }
-
         const { data, error } = await supabase.auth.getUser();
         if (error) throw error;
 
@@ -156,9 +155,11 @@ export default function OfferwallPage() {
             <button
               key={`${offer.provider}-${offer.id}`}
               className="text-left rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition"
-              onClick={() =>
-                window.open(offer.url, "_blank", "noopener,noreferrer")
-              }
+              onClick={() => {
+                const u = offer.url || offer.entry_url || "";
+                if (!u) return;
+                window.open(u, "_blank", "noopener,noreferrer");
+              }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
