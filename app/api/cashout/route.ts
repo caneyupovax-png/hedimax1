@@ -1,3 +1,7 @@
+const auth = req.headers.get("authorization") || "";
+if (!auth) return NextResponse.json({ error: "Unauthorized: missing token" }, { status: 401 });
+if (!auth.toLowerCase().startsWith("bearer ")) return NextResponse.json({ error: "Unauthorized: bad auth header" }, { status: 401 });
+
 // app/api/cashout/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
