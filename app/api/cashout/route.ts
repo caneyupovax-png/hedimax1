@@ -11,6 +11,7 @@ const SUPABASE_ANON_KEY =
 
 export async function POST(req: Request) {
   try {
+    // ENV kontrol
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       return NextResponse.json(
         { error: "Server misconfigured: missing Supabase env" },
@@ -18,6 +19,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Authorization header
     const auth = req.headers.get("authorization") || "";
     if (!auth) {
       return NextResponse.json(
@@ -33,7 +35,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const token = auth.slice(7).trim(); // "Bearer " = 7 char
+    const token = auth.slice(7).trim(); // "Bearer "
     if (!token) {
       return NextResponse.json(
         { error: "Unauthorized: missing token" },
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Body
     const body = await req.json().catch(() => null);
     const { coin, address, amount } = body || {};
 
@@ -51,6 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Supabase (user token ile)
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
