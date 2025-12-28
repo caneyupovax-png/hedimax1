@@ -3,52 +3,37 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-type Offer = {
-  id: string | number;
-  title: string;
-  reward: number;
-  duration: number | null;
-  url: string;
-  entry_url?: string;
-  provider: "cpx";
-};
-
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export default function OfferwallPage() {
-  const [userId, setUserId] = useState<string>("");
-  const [userLoading, setUserLoading] = useState(true);
+  const [userId, setUserId] = useState("");
+  const [loadingUser, setLoadingUser] = useState(true);
 
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offerwallUrl, setOfferwallUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string>("");
+  const [err, setErr] = useState("");
 
   const supabase =
     SUPABASE_URL && SUPABASE_ANON
       ? createClient(SUPABASE_URL, SUPABASE_ANON)
       : null;
 
-  // 1) Kullanıcıyı çek
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        if (!supabase) {
-          throw new Error(
-            "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
-          );
-        }
+        if (!supabase) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / ANON KEY");
+
         const { data, error } = await supabase.auth.getUser();
         if (error) throw error;
 
-        const id = data?.user?.id || "";
-        if (!cancelled) setUserId(id);
+        if (!cancelled) setUserId(data?.user?.id || "");
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Failed to get user");
       } finally {
-        if (!cancelled) setUserLoading(false);
+        if (!cancelled) setLoadingUser(false);
       }
     })();
 
@@ -58,7 +43,6 @@ export default function OfferwallPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2) Offerları çek
   useEffect(() => {
     if (!userId) return;
 
@@ -69,22 +53,16 @@ export default function OfferwallPage() {
       setErr("");
 
       try {
-        const res = await fetch(
-          `/api/offerwall/cpx?user_id=${encodeURIComponent(userId)}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`/api/offerwall/cpx?user_id=${encodeURIComponent(userId)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
 
-        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to get offerwall url");
 
-        if (!res.ok || !json?.ok) {
-          throw new Error(json?.error || "Offerwall error");
-        }
-
-        if (!cancelled) {
-          setOffers(Array.isArray(json.offers) ? json.offers : []);
-        }
+        if (!cancelled) setOfferwallUrl(json.offerwall_url || "");
       } catch (e: any) {
-        if (!cancelled) setErr(e?.message || "Failed to load offers");
+        if (!cancelled) setErr(e?.message || "Failed to load offerwall");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -95,7 +73,7 @@ export default function OfferwallPage() {
     };
   }, [userId]);
 
-  if (userLoading) {
+  if (loadingUser) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-white/80">
         Loading user...
@@ -112,78 +90,30 @@ export default function OfferwallPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-6">
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Earn</h1>
-          <p className="text-white/60 text-sm">
-            Complete surveys to earn coins.
-          </p>
-        </div>
-
-        <button
-          className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 border border-white/10"
-          onClick={() => location.reload()}
-        >
-          Refresh
-        </button>
-      </div>
+    <main className="mx-auto w-full max-w-3xl px-4 py-10">
+      <h1 className="text-2xl font-semibold text-white">Earn</h1>
+      <p className="mt-2 text-white/60">
+        Open CPX Offerwall to complete surveys.
+      </p>
 
       {err ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
+        <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
           {err}
         </div>
       ) : null}
 
-      {loading ? (
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
-          Loading offers...
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+        <button
+          disabled={!offerwallUrl || loading}
+          className="w-full rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 px-4 py-4 text-white disabled:opacity-50"
+          onClick={() => window.open(offerwallUrl, "_blank", "noopener,noreferrer")}
+        >
+          {loading ? "Loading..." : "Open CPX Offerwall →"}
+        </button>
+
+        <div className="mt-3 text-xs text-white/50">
+          Not: Ödül/puan CPX ekranında görünmeyebilir; kazanım postback ile puana yansır.
         </div>
-      ) : null}
-
-      {!loading && !err && offers.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
-          No surveys available right now.
-        </div>
-      ) : null}
-
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {offers.map((offer) => {
-          const reward = Number.isFinite(offer.reward) ? offer.reward : 0;
-
-          return (
-            <button
-              key={`${offer.provider}-${offer.id}`}
-              className="text-left rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition"
-              onClick={() => {
-                const u = offer.url || offer.entry_url || "";
-                if (!u) return;
-                window.open(u, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-white font-medium truncate">
-                    {offer.title}
-                  </div>
-
-                  <div className="mt-1 text-xs text-white/60">
-                    Provider: CPX
-                    {offer.duration ? ` • ${offer.duration} min` : ""}
-                  </div>
-                </div>
-
-                <div className="shrink-0 rounded-xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-1">
-                  <div className="text-yellow-200 font-semibold">
-                    {reward} Coins
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-sm text-white/70">Tap to start →</div>
-            </button>
-          );
-        })}
       </div>
     </main>
   );
