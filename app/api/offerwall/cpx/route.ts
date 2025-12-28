@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const appId = process.env.CPX_APP_ID || "";
-  const secureHashSecret = (process.env.CPX_SECURE_HASH || "").trim();
-
   if (!appId) {
     return NextResponse.json({ ok: false, error: "Missing CPX_APP_ID" }, { status: 500 });
   }
@@ -22,20 +19,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid user_id" }, { status: 400 });
   }
 
-  // secure_hash CPX panelde aktifse lazım, değilse boş geçebiliriz
-  const secureHash = secureHashSecret
-    ? crypto.createHash("md5").update(`${userId}-${secureHashSecret}`).digest("hex")
-    : "";
-
-  // ✅ CPX Offerwall entry URL (stabil)
   const url = new URL("https://offers.cpx-research.com/index.php");
   url.searchParams.set("app_id", appId);
   url.searchParams.set("ext_user_id", userId);
-  if (secureHash) url.searchParams.set("secure_hash", secureHash);
+  url.searchParams.set("subid_1", userId);
 
-  return NextResponse.json({
-    ok: true,
-    provider: "cpx",
-    offerwall_url: url.toString(),
-  });
+  return NextResponse.json({ ok: true, url: url.toString() });
 }
