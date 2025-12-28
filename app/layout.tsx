@@ -1,19 +1,15 @@
 import "./globals.css";
-import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
+import ClientShell from "@/components/ClientShell";
 
-export const metadata: Metadata = {
-  title: "Hedimax | Earn & Cashout",
-  description: "Earn rewards and cash out fast with Hedimax.",
-  icons: { icon: "/favicon.ico" },
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-gradient-to-br from-emerald-950 via-slate-950 to-black text-white antialiased">
-        <Navbar />
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className="bg-black text-white" suppressHydrationWarning>
+        <ClientShell>{children}</ClientShell>
       </body>
     </html>
   );
