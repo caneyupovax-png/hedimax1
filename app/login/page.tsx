@@ -29,9 +29,8 @@ export default function LoginPage() {
         return;
       }
 
-      // ✅ Login sonrası cashout'a atmasın → ana sayfaya/earn'e gönder
-      router.push("/earn");
-      // istersen "/dashboard" ya da "/" yapabilirsin
+      // ✅ LOGIN SONRASI DASHBOARD
+      router.push("/dashboard");
     } catch {
       setMsg("Bir hata oluştu");
     } finally {
@@ -45,7 +44,9 @@ export default function LoginPage() {
         onSubmit={handleLogin}
         className="mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-black/40 p-6 backdrop-blur"
       >
-        <h1 className="mb-6 text-center text-2xl font-semibold">Login</h1>
+        <h1 className="mb-6 text-center text-2xl font-semibold">
+          Login
+        </h1>
 
         <label className="text-sm text-white/70">Email</label>
         <input
@@ -56,7 +57,9 @@ export default function LoginPage() {
           required
         />
 
-        <label className="mt-4 block text-sm text-white/70">Password</label>
+        <label className="mt-4 block text-sm text-white/70">
+          Password
+        </label>
         <input
           className="mt-1 w-full rounded-xl border border-white/10 bg-black/60 p-3 text-white outline-none"
           type="password"
@@ -74,7 +77,9 @@ export default function LoginPage() {
         </button>
 
         {msg && (
-          <p className="mt-4 text-center text-sm text-red-400">{msg}</p>
+          <p className="mt-4 text-center text-sm text-red-400">
+            {msg}
+          </p>
         )}
       </form>
     </div>
