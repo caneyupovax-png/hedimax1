@@ -1,17 +1,13 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-type Coin = "BTC" | "ETH" | "USDT";
-
 export default function CashoutPage() {
-  // 🔴 BU LOG VE YAZI GÖRÜNMÜYORSA → yanlış dosya deploy ediliyor
-  console.log("CASHOUT PAGE LOADED – VERSION CASHOUT-v1");
-
   const supabase = createClient();
 
-  const [coin, setCoin] = useState<Coin>("BTC");
+  const [coin, setCoin] = useState("USDT");
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState<number>(0);
   const [msg, setMsg] = useState("");
@@ -22,44 +18,28 @@ export default function CashoutPage() {
     setLoading(true);
 
     try {
-      // 1️⃣ USER VAR MI
-      const { data: userData, error: userErr } =
-        await supabase.auth.getUser();
-
-      console.log("USER:", userData?.user?.id || "NO USER");
-
-      if (userErr || !userData?.user) {
-        setMsg("Not logged in");
+      // 🔹 USER KONTROLÜ (en sağlam yol)
+      const { data: userRes } = await supabase.auth.getUser();
+      if (!userRes?.user) {
+        setMsg("Giriş yapman gerekiyor");
         return;
       }
 
-      // 2️⃣ SESSION + TOKEN
-      const { data: sessionData } =
-        await supabase.auth.getSession();
-
-      const token = sessionData?.session?.access_token;
-
-      console.log("TOKEN LEN:", token?.length || 0);
+      // 🔹 SESSION + TOKEN
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes?.session?.access_token;
 
       if (!token) {
-        setMsg("TOKEN YOK (session null)");
+        setMsg("Oturum bulunamadı, tekrar giriş yap");
         return;
       }
 
-      // 3️⃣ HEADER'I ZORLA VE LOGLA
-      const headers = new Headers();
-      headers.set("Content-Type", "application/json");
-      headers.set("Authorization", `Bearer ${token}`);
-
-      console.log(
-        "SENDING HEADERS:",
-        Array.from(headers.entries())
-      );
-
-      // 4️⃣ API CALL
       const res = await fetch("/api/cashout", {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           coin,
           address,
@@ -69,49 +49,35 @@ export default function CashoutPage() {
 
       const json = await res.json().catch(() => ({}));
 
-      console.log("API STATUS:", res.status);
-      console.log("API RESPONSE:", json);
-
       if (!res.ok) {
-        setMsg(json?.error || "Cashout failed");
+        setMsg(json?.error || "Çekim başarısız");
         return;
       }
 
-      setMsg("Cashout success ✅");
+      setMsg("Çekim talebi alındı ✅");
       setAddress("");
       setAmount(0);
-    } catch (err: any) {
-      console.error("CASHOUT ERROR:", err);
-      setMsg("Unexpected error");
+    } catch (e) {
+      setMsg("Bir hata oluştu");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 480 }}>
+    <div style={{ maxWidth: 420, margin: "40px auto" }}>
       <h1>Cashout</h1>
 
-      {/* 🔴 BU YAZI GÖRÜNMELİ */}
-      <p style={{ color: "yellow", fontWeight: "bold" }}>
-        VERSION: CASHOUT-v1
-      </p>
-
-      <br />
-
       <label>Coin</label>
-      <select
-        value={coin}
-        onChange={(e) => setCoin(e.target.value as Coin)}
-      >
+      <select value={coin} onChange={(e) => setCoin(e.target.value)}>
+        <option value="USDT">USDT</option>
         <option value="BTC">BTC</option>
         <option value="ETH">ETH</option>
-        <option value="USDT">USDT</option>
       </select>
 
       <br /><br />
 
-      <label>Address</label>
+      <label>Adres</label>
       <input
         value={address}
         onChange={(e) => setAddress(e.target.value)}
@@ -120,7 +86,7 @@ export default function CashoutPage() {
 
       <br /><br />
 
-      <label>Amount</label>
+      <label>Miktar</label>
       <input
         type="number"
         value={amount}
@@ -130,14 +96,10 @@ export default function CashoutPage() {
       <br /><br />
 
       <button onClick={handleCashout} disabled={loading}>
-        {loading ? "Sending..." : "Cashout"}
+        {loading ? "Gönderiliyor..." : "Çekim Yap"}
       </button>
 
-      {msg && (
-        <p style={{ marginTop: 12 }}>
-          {msg}
-        </p>
-      )}
-    </main>
+      {msg && <p style={{ marginTop: 10 }}>{msg}</p>}
+    </div>
   );
 }
