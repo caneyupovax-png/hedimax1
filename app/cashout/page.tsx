@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 type Coin = "BTC" | "ETH" | "USDT";
 
 export default function CashoutPage() {
-  // 🔴 Bu log GELMİYORSA → yanlış dosya deploy ediliyor
-  console.log("CASHOUT PAGE LOADED – VERSION v1");
+  // 🔴 BU LOG VE YAZI GÖRÜNMÜYORSA → yanlış dosya deploy ediliyor
+  console.log("CASHOUT PAGE LOADED – VERSION CASHOUT-v1");
 
   const supabase = createClient();
 
@@ -91,6 +91,13 @@ export default function CashoutPage() {
   return (
     <main style={{ padding: 24, maxWidth: 480 }}>
       <h1>Cashout</h1>
+
+      {/* 🔴 BU YAZI GÖRÜNMELİ */}
+      <p style={{ color: "yellow", fontWeight: "bold" }}>
+        VERSION: CASHOUT-v1
+      </p>
+
+      <br />
 
       <label>Coin</label>
       <select
