@@ -13,21 +13,47 @@ export default function Navbar() {
 
   const [isAuthed, setIsAuthed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [username, setUsername] = useState("Guest");
+  const [balance, setBalance] = useState<number>(0);
 
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    const load = async () => {
       const { data } = await supabase.auth.getSession();
       if (!alive) return;
-      setIsAuthed(!!data.session);
-      setLoading(false);
-    })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!alive) return;
+      const session = data.session;
       setIsAuthed(!!session);
+
+      if (session?.user) {
+        const u: any = session.user;
+        const name =
+          u?.user_metadata?.username ||
+          u?.user_metadata?.name ||
+          (u?.email ? u.email.split("@")[0] : "User");
+
+        setUsername(name);
+
+        const { data: pb } = await supabase
+          .from("points_balance")
+          .select("balance")
+          .eq("user_id", u.id)
+          .single();
+
+        setBalance(Number(pb?.balance ?? 0));
+      } else {
+        setUsername("Guest");
+        setBalance(0);
+      }
+
       setLoading(false);
+    };
+
+    load();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      load();
     });
 
     return () => {
@@ -40,9 +66,6 @@ export default function Navbar() {
   const onLogout = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {}
     router.replace("/login");
     router.refresh();
     setLoading(false);
@@ -65,27 +88,23 @@ export default function Navbar() {
         <span
           className={[
             "pointer-events-none absolute left-0 right-0 -bottom-[8px] mx-auto h-[2px] w-0 rounded-full transition-all duration-300",
-            isOn ? "w-full bg-emerald-400" : "group-hover:w-full bg-emerald-400/70",
+            isOn
+              ? "w-full bg-emerald-400"
+              : "group-hover:w-full bg-emerald-400/70",
           ].join(" ")}
         />
       </Link>
     );
   };
 
-  const PrimaryBtn =
-    "inline-flex h-11 items-center justify-center rounded-full px-7 text-sm font-semibold leading-none transition";
-  const GhostBtn =
-    "inline-flex h-11 items-center justify-center rounded-full px-7 text-sm font-semibold leading-none transition";
-
   return (
     <header className="sticky top-0 z-50">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-emerald-500/8 to-transparent" />
-
-      <div className="border-b border-black/60 bg-gradient-to-b from-black/95 via-black/90 to-black/85 backdrop-blur-md">
+      {/* 🔥 SAYDAMLIK AZALTILDI */}
+      <div className="border-b border-white/10 bg-black/95">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5">
           {/* LEFT */}
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_0_0_1px_rgba(16,185,129,0.12)]">
+            <div className="relative h-10 w-10 overflow-hidden rounded-2xl border border-white/10 bg-black">
               <Image
                 src="/logo.png"
                 alt="Hedimax"
@@ -94,9 +113,7 @@ export default function Navbar() {
                 priority
               />
             </div>
-            <span className="text-sm font-semibold tracking-tight text-white">
-              HEDIMAX
-            </span>
+            <span className="text-sm font-semibold text-white">HEDIMAX</span>
           </Link>
 
           {/* CENTER */}
@@ -110,29 +127,37 @@ export default function Navbar() {
           {/* RIGHT */}
           <div className="flex items-center gap-3">
             {loading ? (
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-28 animate-pulse rounded-full bg-white/10" />
-                <div className="h-11 w-32 animate-pulse rounded-full bg-white/10" />
-              </div>
+              <div className="h-11 w-40 animate-pulse rounded-full bg-white/10" />
             ) : isAuthed ? (
-              <button
-                onClick={onLogout}
-                className={`${PrimaryBtn} bg-emerald-400 text-black hover:bg-emerald-300`}
-              >
-                Logout
-              </button>
-            ) : (
               <>
                 <Link
-                  href="/login"
-                  className={`${PrimaryBtn} bg-emerald-400 text-black hover:bg-emerald-300`}
+                  href="/dashboard"
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm hover:border-white/20"
                 >
-                  Sign In
+                  {username} • {balance} pts
                 </Link>
 
+                <button
+                  onClick={onLogout}
+                  className="rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-black hover:bg-emerald-300"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                {/* ✅ LOGIN */}
+                <Link
+                  href="/login"
+                  className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-black hover:bg-emerald-300"
+                >
+                  Login
+                </Link>
+
+                {/* ✅ REGISTER (GERİ EKLENDİ) */}
                 <Link
                   href="/register"
-                  className={`${GhostBtn} border border-emerald-400/55 bg-black text-emerald-200 hover:bg-black/80 hover:border-emerald-300/80`}
+                  className="rounded-full border border-emerald-400/55 bg-black px-6 py-2 text-sm font-semibold text-emerald-200 hover:border-emerald-300/80 hover:bg-black/80"
                 >
                   Register
                 </Link>

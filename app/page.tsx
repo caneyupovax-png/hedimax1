@@ -1,7 +1,37 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 export default function HomePage() {
+  const supabase = createClient();
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+
+    const load = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!alive) return;
+      setIsAuthed(!!data.session);
+    };
+
+    load();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (!alive) return;
+      setIsAuthed(!!session);
+    });
+
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <main className="min-h-[calc(100vh-64px)] bg-gradient-to-br from-emerald-950 via-slate-950 to-black text-white">
       {/* Background accents */}
@@ -24,7 +54,9 @@ export default function HomePage() {
                 />
               </div>
               <div className="leading-tight">
-                <div className="text-xl font-semibold tracking-tight">Hedimax</div>
+                <div className="text-xl font-semibold tracking-tight">
+                  Hedimax
+                </div>
                 <div className="text-sm text-white/60">
                   Earn rewards. Cash out fast.
                 </div>
@@ -48,12 +80,26 @@ export default function HomePage() {
               >
                 Start Earning
               </Link>
-              <Link
-                href="/login"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-5 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
-                Sign in
-              </Link>
+
+              {/* ✅ Giriş yaptıysa ortadaki Sign in görünmesin */}
+              {!isAuthed && (
+                <Link
+                  href="/login"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-5 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  Sign in
+                </Link>
+              )}
+
+              {/* (İstersen giriş yaptıysa bunun yerine Dashboard butonu koyduk) */}
+              {isAuthed && (
+                <Link
+                  href="/dashboard"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/40 bg-black/30 px-5 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300/60 hover:bg-black/40"
+                >
+                  Go to Dashboard
+                </Link>
+              )}
             </div>
 
             {/* Minimal bullets */}
@@ -92,9 +138,7 @@ export default function HomePage() {
 
         {/* How it works */}
         <section className="mt-14">
-          <h2 className="text-2xl font-semibold tracking-tight">
-            How it works
-          </h2>
+          <h2 className="text-2xl font-semibold tracking-tight">How it works</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
               <div className="text-sm font-semibold text-emerald-200">1</div>

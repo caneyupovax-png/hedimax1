@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-type UserMini = {
-  id: string;
-  email?: string | null;
-  user_metadata?: any;
-};
+import { createClient } from "@/utils/supabase/client";
 
 const OFFERWALLS = [
   { name: "AyetStudios", slug: "ayetstudios" },
@@ -20,163 +14,148 @@ const OFFERWALLS = [
 
 export default function EarnPage() {
   const router = useRouter();
-
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, anon);
-  }, []);
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState<string>("User");
-  const [balance, setBalance] = useState<number>(0);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [username, setUsername] = useState("Guest");
+  const [balance, setBalance] = useState(0);
 
   useEffect(() => {
-    const run = async () => {
+    let alive = true;
+
+    const load = async () => {
       setLoading(true);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+
+      if (!alive) return;
 
       if (!session?.user) {
-        router.push("/login");
+        setIsAuthed(false);
+        setUsername("Guest");
+        setBalance(0);
+        setLoading(false);
         return;
       }
 
-      const u = session.user as any as UserMini;
+      setIsAuthed(true);
 
+      const u: any = session.user;
       const name =
         u?.user_metadata?.username ||
         u?.user_metadata?.name ||
-        (u?.email ? u.email.split("@")[0] : "User");
+        (u?.email ? String(u.email).split("@")[0] : "User");
 
       setUsername(String(name));
 
-      // points_balance -> balance
-      const { data, error } = await supabase
+      const { data: pb } = await supabase
         .from("points_balance")
         .select("balance")
         .eq("user_id", u.id)
         .single();
 
-      if (!error && data?.balance != null) {
-        setBalance(Number(data.balance));
-      } else {
-        setBalance(0);
-      }
-
+      setBalance(Number(pb?.balance ?? 0));
       setLoading(false);
     };
 
-    run();
-  }, [router, supabase]);
+    load();
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      load();
+    });
+
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openOfferwall = async (slug: string) => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      router.push(`/login?next=/offerwall/${slug}`);
+      return;
+    }
+    router.push(`/offerwall/${slug}`);
   };
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      {/* TOP BAR */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/60 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
-            <div className="text-lg font-semibold">HEDIMAX</div>
-
-            <nav className="hidden sm:flex items-center gap-6 text-sm text-white/70">
-              <Link className="hover:text-white" href="/earn">
-                Earn
-              </Link>
-              <Link className="hover:text-white" href="/cashout">
-                Cashout
-              </Link>
-              <Link className="hover:text-white" href="/leaderboard">
-                Leaderboard
-              </Link>
-              <Link className="hover:text-white" href="/rewards">
-                Rewards
-              </Link>
-            </nav>
+    <main className="mx-auto max-w-6xl px-6 py-8">
+      {/* Guest banner */}
+      {!isAuthed && (
+        <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="text-lg font-semibold">You’re browsing as Guest</div>
+          <div className="mt-1 text-sm text-white/70">
+            Login to track points and open offerwalls.
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Username + Balance (tıklanınca dashboard) */}
+          <div className="mt-4">
             <Link
-              href="/dashboard"
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 hover:border-white/20"
-              title="Go to dashboard"
+              href="/login?next=/earn"
+              className="inline-flex rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
             >
-              <span className="text-sm text-white/80">
-                {loading ? "Loading..." : username}
-              </span>
-              <span className="mx-2 text-white/30">•</span>
-              <span className="text-sm font-semibold">
-                {loading ? "-" : balance} pts
-              </span>
+              Login
             </Link>
-
-            <button
-              onClick={logout}
-              className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
-            >
-              Logout
-            </button>
           </div>
         </div>
-      </header>
+      )}
 
-      {/* CONTENT */}
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* LEFT */}
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="text-sm text-white/60">Welcome</div>
-            <div className="mt-1 text-2xl font-semibold">
-              Hi, <span className="text-emerald-400">{username}</span>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* LEFT */}
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="text-sm text-white/60">Welcome</div>
+          <div className="mt-1 text-2xl font-semibold">
+            Hi, <span className="text-emerald-400">{username}</span>
+          </div>
+
+          <div className="mt-6 text-sm text-white/60">Current balance</div>
+          <div className="mt-2 text-5xl font-bold">{loading ? "…" : balance}</div>
+          <div className="text-white/60">points</div>
+
+          <div className="mt-6 text-xs text-white/50">
+            {isAuthed ? (
+              <>
+                Go to{" "}
+                <Link className="underline hover:text-white" href="/dashboard">
+                  dashboard
+                </Link>{" "}
+                to see details.
+              </>
+            ) : (
+              "Login to see your real balance and start earning."
+            )}
+          </div>
+        </section>
+
+        {/* RIGHT */}
+        <section className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div>
+            <div className="text-lg font-semibold">Offerwalls</div>
+            <div className="text-sm text-white/60">
+              Choose an offerwall to start earning points.
             </div>
+          </div>
 
-            <div className="mt-6 text-sm text-white/60">Current balance</div>
-            <div className="mt-2 text-5xl font-bold">
-              {loading ? "…" : balance}
-            </div>
-            <div className="text-white/60">points</div>
-
-            <div className="mt-6 text-xs text-white/50">
-              Click your username on the top-right to open the dashboard.
-            </div>
-          </section>
-
-          {/* RIGHT – OFFERWALLS */}
-          <section className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-semibold">Offerwalls</div>
-                <div className="text-sm text-white/60">
-                  Choose an offerwall to start earning points.
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {OFFERWALLS.map((o) => (
+              <button
+                key={o.slug}
+                onClick={() => openOfferwall(o.slug)}
+                className="block w-full text-left rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-white/20 transition"
+              >
+                <div className="text-base font-semibold">{o.name}</div>
+                <div className="mt-1 text-sm text-white/60">
+                  Open {o.name} offerwall
                 </div>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {OFFERWALLS.map((o) => (
-                <Link
-                  key={o.slug}
-                  href={`/offerwall/${o.slug}`}
-                  className="block rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-white/20 transition"
-                >
-                  <div className="text-base font-semibold">{o.name}</div>
-                  <div className="mt-1 text-sm text-white/60">
-                    Open {o.name} offerwall
-                  </div>
-                  <div className="mt-4 inline-flex rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">
-                    Open
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
+                <div className="mt-4 inline-flex rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">
+                  Open
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );
