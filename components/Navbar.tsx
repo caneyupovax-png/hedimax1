@@ -45,10 +45,7 @@ export default function Navbar({
   const signOut = async () => {
     await supabase.auth.signOut();
     setIsAuthed(false);
-    // navbar + page state tazelensin
     router.refresh();
-    // güvenli fallback:
-    // window.location.href = "/";
   };
 
   return (
@@ -69,12 +66,29 @@ export default function Navbar({
               <div className="text-white/60 text-sm px-3">...</div>
             ) : !isAuthed ? (
               <>
-                <button className="btn-ghost" onClick={onOpenLogin}>
+                {/* ✅ JS olmasa bile aynı sayfada auth param ile açılır */}
+                <Link
+                  href="/?auth=login"
+                  className="btn-ghost"
+                  onClick={(e) => {
+                    // JS varsa: route değiştirmeden modal aç (daha hızlı)
+                    e.preventDefault();
+                    onOpenLogin();
+                  }}
+                >
                   Sign In
-                </button>
-                <button className="btn-primary" onClick={onOpenRegister}>
+                </Link>
+
+                <Link
+                  href="/?auth=register"
+                  className="btn-primary"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onOpenRegister();
+                  }}
+                >
                   Sign Up
-                </button>
+                </Link>
               </>
             ) : (
               <>
