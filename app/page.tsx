@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 type Offer = {
@@ -15,31 +14,12 @@ type Offer = {
 export default function HomePage() {
   const supabase = createClient();
 
-  const [isAuthed, setIsAuthed] = useState(false);
-
   const [showPass, setShowPass] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeType, setNoticeType] = useState<"success" | "error" | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase.auth.getSession();
-      setIsAuthed(!!data.session);
-    };
-
-    load();
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setIsAuthed(!!session);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, [supabase]);
 
   const offers: Offer[] = useMemo(
     () => [
@@ -59,7 +39,8 @@ export default function HomePage() {
     setNotice(null);
     setNoticeType(null);
 
-    if (!email.includes("@")) {
+    const e = email.trim();
+    if (!e.includes("@") || e.length < 5) {
       showNotice("error", "Please enter a valid email address.");
       return;
     }
@@ -71,12 +52,10 @@ export default function HomePage() {
     try {
       setBusy(true);
 
-      const { error } = await supabase.auth.signUp({
-        email,
+      const { data, error } = await supabase.auth.signUp({
+        email: e,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
+        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
       });
 
       if (error) {
@@ -84,9 +63,15 @@ export default function HomePage() {
         return;
       }
 
+      if (data.session) {
+        showNotice("success", "Account created. Redirecting…");
+        window.location.href = "/dashboard";
+        return;
+      }
+
       showNotice(
         "success",
-        "Account created. Confirmation email sent. Please check your inbox."
+        "Account created. Confirmation email sent. Please check your inbox (and spam)."
       );
 
       setPassword("");
@@ -98,7 +83,7 @@ export default function HomePage() {
 
   return (
     <div className="relative -mx-6 -mt-8 px-6 pt-6">
-      {/* BACKGROUND */}
+      {/* BACKGROUND (tam ekran) */}
       <div
         className="fixed inset-0 z-0"
         style={{
@@ -113,47 +98,15 @@ export default function HomePage() {
         className="fixed inset-0 z-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(7,10,24,0.15), rgba(7,10,24,0.7), rgba(4,4,15,0.98))",
+            "radial-gradient(900px 420px at 50% 18%, rgba(0,0,0,0.35), transparent 60%)," +
+            "linear-gradient(to bottom, rgba(7,10,24,0.15), rgba(7,10,24,0.70), rgba(4,4,15,0.98))",
         }}
       />
 
       {/* CONTENT */}
       <div className="relative z-10">
-        {/* TOP BAR */}
-        <div className="mx-auto max-w-6xl">
-          <div className="flex items-center justify-between py-4">
-            {/* LOGO */}
-            <div className="flex items-center gap-2">
-              <Image
-                src="/logo.png"
-                alt="Hedimax"
-                width={44}
-                height={44}
-                priority
-              />
-              <span className="text-xl font-extrabold leading-none">
-                <span className="text-emerald-300">HEDI</span>MAX
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!isAuthed ? (
-                <>
-                  <Link className="btn-ghost" href="/login">Sign In</Link>
-                  <Link className="btn-primary" href="/register">Sign Up</Link>
-                </>
-              ) : (
-                <>
-                  <Link className="btn-ghost" href="/dashboard">Dashboard</Link>
-                  <Link className="btn-primary" href="/earn">Earn</Link>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* HERO */}
-        <div className="mx-auto max-w-6xl pt-6 pb-12">
+        <div className="mx-auto max-w-6xl pt-8 pb-10">
           <div className="text-center">
             <h1 className="text-[34px] sm:text-5xl lg:text-[56px] font-extrabold leading-tight">
               <span className="text-emerald-300">Get paid</span> for testing apps,
@@ -161,66 +114,93 @@ export default function HomePage() {
             </h1>
           </div>
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-12">
+          {/* GRID */}
+          <div className="mt-10 grid gap-6 lg:grid-cols-12 items-start">
             {/* OFFERS */}
-            <div className="lg:col-span-7 grid sm:grid-cols-3 gap-4">
-              {offers.map((o) => (
-                <div key={o.title} className="card-glass p-4">
-                  <div className="relative aspect-square rounded-xl overflow-hidden">
-                    <Image src={o.img} alt={o.title} fill className="object-cover" />
+            <div className="lg:col-span-7">
+              <div className="grid gap-4 sm:grid-cols-3">
+                {offers.map((o) => (
+                  <div key={o.title} className="card-glass p-4">
+                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-black/30 border border-white/10">
+                      <Image src={o.img} alt={o.title} fill className="object-cover" />
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="text-white font-semibold">{o.title}</div>
+                      <div className="text-white/60 text-sm">{o.subtitle}</div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-lg font-extrabold text-white">{o.payout}</div>
+                      <div className="text-xs text-white/60">★ 5.0</div>
+                    </div>
                   </div>
-                  <div className="mt-2 font-semibold">{o.title}</div>
-                  <div className="text-sm text-white/60">{o.subtitle}</div>
-                  <div className="mt-1 font-bold">{o.payout}</div>
+                ))}
+              </div>
+
+              <div className="mt-5 card-glass p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-white font-semibold">Hedimax rate</div>
+                  <div className="text-white/75 text-sm">
+                    1 USD = <span className="text-white font-semibold">1000 coin</span>
+                  </div>
                 </div>
-              ))}
+                <div className="mt-2 text-white/60 text-sm">
+                  Coins are credited automatically after completion via postback.
+                </div>
+              </div>
             </div>
 
-            {/* SIGNUP */}
+            {/* SIGNUP CARD */}
             <div className="lg:col-span-5">
               <div className="card-glass p-5">
-                <div className="text-xl font-extrabold text-center mb-4">
+                <div className="text-center text-xl font-extrabold text-white">
                   Sign Up for Free
                 </div>
 
-                <div className="space-y-3">
+                <div className="mt-4 space-y-3">
                   <input
                     className="input"
                     placeholder="Email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onFocus={() => setShowPass(true)}
+                    inputMode="email"
+                    autoComplete="email"
                   />
 
-                  {showPass && (
+                  {showPass ? (
                     <input
                       className="input"
-                      type="password"
                       placeholder="Password (min 6 chars)"
+                      type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
                     />
-                  )}
+                  ) : null}
 
                   <button
+                    type="button"
                     onClick={signup}
                     disabled={busy}
-                    className="btn-primary w-full"
+                    className="btn-primary w-full disabled:opacity-60"
                   >
                     {busy ? "Creating..." : "Create account"}
                   </button>
 
-                  {notice && (
+                  {notice ? (
                     <div
-                      className={`text-xs rounded-xl px-3 py-2 ${
+                      className={[
+                        "rounded-2xl border px-3 py-2 text-xs leading-relaxed",
                         noticeType === "success"
-                          ? "bg-emerald-400/10 text-emerald-200"
-                          : "bg-red-400/10 text-red-200"
-                      }`}
+                          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
+                          : "border-red-400/30 bg-red-400/10 text-red-100",
+                      ].join(" ")}
                     >
                       {notice}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -229,7 +209,7 @@ export default function HomePage() {
 
         {/* HOW IT WORKS */}
         <section className="mx-auto max-w-6xl pb-24">
-          <div className="text-center mb-14">
+          <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-extrabold">
               We Got Everything You Need To{" "}
               <span className="text-emerald-300">Start Earning</span>.
@@ -238,8 +218,7 @@ export default function HomePage() {
 
           <div className="grid gap-8 md:grid-cols-3">
             <div className="card-glass p-8 text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full
-                              bg-emerald-400/10 ring-2 ring-emerald-400/30">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/10 ring-2 ring-emerald-400/30">
                 <span className="text-3xl">🎮</span>
               </div>
               <h3 className="text-lg font-bold mb-2">Play the Game / Survey</h3>
@@ -249,8 +228,7 @@ export default function HomePage() {
             </div>
 
             <div className="card-glass p-8 text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full
-                              bg-emerald-400/10 ring-2 ring-emerald-400/30">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/10 ring-2 ring-emerald-400/30">
                 <span className="text-3xl">👑</span>
               </div>
               <h3 className="text-lg font-bold mb-2">Complete the Offer</h3>
@@ -260,8 +238,7 @@ export default function HomePage() {
             </div>
 
             <div className="card-glass p-8 text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full
-                              bg-emerald-400/10 ring-2 ring-emerald-400/30">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/10 ring-2 ring-emerald-400/30">
                 <span className="text-3xl">💰</span>
               </div>
               <h3 className="text-lg font-bold mb-2">Get Paid</h3>

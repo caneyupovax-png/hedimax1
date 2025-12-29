@@ -1,30 +1,36 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-export default function Navbar() {
-  const pathname = usePathname();
+export default function Navbar({
+  onOpenLogin,
+  onOpenRegister,
+}: {
+  onOpenLogin: () => void;
+  onOpenRegister: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
 
-  // 🔴 Anasayfada navbar yok
-  if (pathname === "/") return null;
-
-  const supabase = createClient();
-  const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
     let alive = true;
 
-    // İlk session kontrolü
-    supabase.auth.getSession().then(({ data }) => {
+    const load = async () => {
+      const { data } = await supabase.auth.getSession();
       if (!alive) return;
       setIsAuthed(!!data.session);
-    });
+      setLoading(false);
+    };
 
-    // Auth değişimlerini dinle
+    load();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!alive) return;
       setIsAuthed(!!session);
@@ -34,61 +40,57 @@ export default function Navbar() {
       alive = false;
       sub.subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabase]);
 
-  const logout = async () => {
-    try {
-      setLoading(true);
-      await supabase.auth.signOut();
-      window.location.href = "/"; // landing'e at
-    } finally {
-      setLoading(false);
-    }
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setIsAuthed(false);
+    // navbar + page state tazelensin
+    router.refresh();
+    // güvenli fallback:
+    // window.location.href = "/";
   };
 
   return (
-    <header className="nav-glass">
-      <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
-        {/* LOGO */}
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl bg-white/10 border border-white/10" />
-          <span className="text-white font-semibold tracking-wide">
-            Hedimax
-          </span>
-        </Link>
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="flex h-16 items-center justify-between">
+          {/* Brand */}
+          <Link href="/" className="flex items-center gap-2">
+            <Image src="/logo.png" alt="Hedimax" width={38} height={38} priority />
+            <span className="text-lg font-extrabold leading-none">
+              <span className="text-emerald-300">HEDI</span>MAX
+            </span>
+          </Link>
 
-        {/* MENU */}
-        <nav className="flex items-center gap-2">
-          {isAuthed === null ? (
-            <span className="text-white/60 text-sm">...</span>
-          ) : isAuthed ? (
-            <>
-              <Link className="btn-ghost" href="/earn">
-                Earn
-              </Link>
-              <Link className="btn-ghost" href="/cashout">
-                Cashout
-              </Link>
-              <button
-                onClick={logout}
-                disabled={loading}
-                className="btn-ghost"
-              >
-                {loading ? "Logging out..." : "Logout"}
-              </button>
-            </>
-          ) : (
-            <>
-              <Link className="btn-ghost" href="/login">
-                Sign in
-              </Link>
-              <Link className="btn-primary" href="/register">
-                Register
-              </Link>
-            </>
-          )}
-        </nav>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {loading ? (
+              <div className="text-white/60 text-sm px-3">...</div>
+            ) : !isAuthed ? (
+              <>
+                <button className="btn-ghost" onClick={onOpenLogin}>
+                  Sign In
+                </button>
+                <button className="btn-primary" onClick={onOpenRegister}>
+                  Sign Up
+                </button>
+              </>
+            ) : (
+              <>
+                <Link className="btn-ghost" href="/dashboard">
+                  Dashboard
+                </Link>
+                <Link className="btn-primary" href="/earn">
+                  Earn
+                </Link>
+                <button className="btn-ghost" onClick={signOut}>
+                  Sign Out
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </header>
   );
