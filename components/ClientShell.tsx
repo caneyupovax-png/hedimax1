@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "./Navbar";
 import AuthModal from "./AuthModal";
@@ -20,7 +20,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<Mode>("login");
 
-  // URL'den auth paramını oku (deep link + back/forward destek)
   useEffect(() => {
     const a = searchParams.get("auth");
     if (a === "login" || a === "register") {
@@ -59,7 +58,12 @@ export default function ClientShell({ children }: { children: React.ReactNode })
       />
 
       <main className="bg-app min-h-[calc(100vh-64px)]">
-        <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
+        <div className="mx-auto max-w-6xl px-6 py-8">
+          {/* ✅ soft page transition on route change */}
+          <div key={pathname} className="page-transition">
+            {children}
+          </div>
+        </div>
       </main>
     </>
   );

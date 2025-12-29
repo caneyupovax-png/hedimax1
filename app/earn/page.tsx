@@ -168,64 +168,63 @@ export default function EarnPage() {
   };
 
   return (
-    <div className="bg-app">
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {!isAuthed && (
-          <div className="card-glass p-6">
-            <div className="text-2xl font-extrabold text-white">
-              Continue as Guest
-            </div>
-            <div className="mt-2 text-sm text-white/65 max-w-2xl">
-              Login to track coins and open survey partners.
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/login?next=/earn" className="btn-primary inline-flex">
-                Login
-              </Link>
-              <Link href="/signup" className="btn-ghost inline-flex">
-                Create account
-              </Link>
-            </div>
+    <div>
+      {/* ✅ NO guest flash: only show after loading is done */}
+      {!loading && !isAuthed && (
+        <div className="card-glass p-6">
+          <div className="text-2xl font-extrabold text-white">
+            Continue as Guest
           </div>
-        )}
+          <div className="mt-2 text-sm text-white/65 max-w-2xl">
+            Login to track coins and open survey partners.
+          </div>
 
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href="/?auth=login" className="btn-primary inline-flex">
+              Login
+            </Link>
+            <Link href="/?auth=register" className="btn-ghost inline-flex">
+              Create account
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <Section
+        title="Offerwall Partners"
+        subtitle="Offerwalls are currently disabled. They will be available soon."
+      />
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {offerwalls.map((p) => (
+          <PartnerTile key={p.slug} p={p} onOpen={openPartner} />
+        ))}
+      </div>
+
+      <div className="mt-12">
         <Section
-          title="Offerwall Partners"
-          subtitle="Offerwalls are currently disabled. They will be available soon."
+          title="Survey Partners"
+          subtitle="Choose a survey partner to start earning coins."
         />
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {offerwalls.map((p) => (
+          {surveys.map((p) => (
             <PartnerTile key={p.slug} p={p} onOpen={openPartner} />
           ))}
         </div>
+      </div>
 
-        <div className="mt-12">
-          <Section
-            title="Survey Partners"
-            subtitle="Choose a survey partner to start earning coins."
-          />
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {surveys.map((p) => (
-              <PartnerTile key={p.slug} p={p} onOpen={openPartner} />
-            ))}
+      <div className="mt-12 card-glass p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-white font-semibold">Hedimax rate</div>
+          <div className="text-white/75 text-sm">
+            1 USD = <span className="text-white font-semibold">1000 coin</span>
           </div>
         </div>
-
-        <div className="mt-12 card-glass p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-white font-semibold">Hedimax rate</div>
-            <div className="text-white/75 text-sm">
-              1 USD = <span className="text-white font-semibold">1000 coin</span>
-            </div>
-          </div>
-          <div className="mt-2 text-white/60 text-sm">
-            Coins are credited automatically after completion via postback.
-          </div>
+        <div className="mt-2 text-white/60 text-sm">
+          Coins are credited automatically after completion via postback.
         </div>
-      </main>
+      </div>
     </div>
   );
 }
