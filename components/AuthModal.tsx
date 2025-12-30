@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 type Mode = "login" | "register";
 
@@ -18,6 +19,7 @@ export default function AuthModal({
   onModeChange: (m: Mode) => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
   // animation state
@@ -110,14 +112,17 @@ export default function AuthModal({
         }
         if (data.session) {
           onClose();
-          window.location.href = "/dashboard";
+          // ✅ after login go to Earn
+          router.replace("/earn");
           return;
         }
         setNotice("success", "Signed in.");
         onClose();
+        router.replace("/earn");
         return;
       }
 
+      // ✅ keep confirmation redirect as-is (password reset / confirm flow)
       const redirectTo = `${window.location.origin}/dashboard`;
       const { data, error } = await supabase.auth.signUp({
         email: e,
@@ -132,7 +137,8 @@ export default function AuthModal({
 
       if (data.session) {
         onClose();
-        window.location.href = "/dashboard";
+        // ✅ if session exists immediately, go to Earn
+        router.replace("/earn");
         return;
       }
 
@@ -181,7 +187,9 @@ export default function AuthModal({
   const panelClass =
     "w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.06] shadow-2xl overflow-hidden " +
     "transition-all duration-200 will-change-transform " +
-    (closing ? "opacity-0 translate-y-2 scale-[0.98]" : "opacity-100 translate-y-0 scale-100");
+    (closing
+      ? "opacity-0 translate-y-2 scale-[0.98]"
+      : "opacity-100 translate-y-0 scale-100");
 
   return createPortal(
     <div className="fixed inset-0 z-[60]">

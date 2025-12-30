@@ -192,12 +192,13 @@ body {
     color: rgba(209,250,229,0.95);
   }
 }
-  /* ===== PAGE TRANSITION ===== */
-  .page-transition {
-    animation: pageFadeIn 160ms ease-out both;
-  }
+ .page-transition {
+  animation: pageFadeIn 160ms ease-out both;
+  will-change: opacity;
+}
 
-  @keyframes pageFadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+

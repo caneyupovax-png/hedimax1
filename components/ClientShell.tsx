@@ -57,7 +57,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         onModeChange={(m) => openAuth(m)}
       />
 
-      <main className="bg-app min-h-[calc(100vh-64px)]">
+      <main className="min-h-[calc(100vh-64px)]">
+
         <div className="mx-auto max-w-6xl px-6 py-8">
           {/* ✅ soft page transition on route change */}
           <div key={pathname} className="page-transition">
