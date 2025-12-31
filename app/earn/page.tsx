@@ -1,16 +1,22 @@
 "use client";
 export const dynamic = "force-dynamic";
 
+import { useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 
 type Accent = "cyan" | "red" | "teal" | "green";
+type Kind = "offerwall" | "survey";
 
-type ProviderCard = {
-  key: string;
+type Partner = {
   name: string;
-  accent: Accent;
-  status: "coming" | "live";
-  note?: string;
+  slug: string;
+  kind: Kind;
+  comingSoon?: boolean;
+  badge?: string;
+  logo?: string;
+  solid?: string;
 };
 
 function AccentBar({ accent }: { accent: Accent }) {
@@ -54,11 +60,71 @@ function Pill({ children }: { children: React.ReactNode }) {
 
 export default function EarnPage() {
   const router = useRouter();
+  const supabase = createClient();
 
-  const providers: ProviderCard[] = [
-    { key: "lootably", name: "Lootably", accent: "cyan", status: "coming", note: "Coming soon" },
-    { key: "mmwall", name: "MM Wall", accent: "red", status: "coming", note: "Coming soon" },
-    { key: "adgate", name: "AdGate", accent: "teal", status: "coming", note: "Coming soon" },
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<number | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const PARTNERS: Partner[] = useMemo(
+    () => [
+      { name: "Lootably", slug: "lootably", kind: "offerwall", comingSoon: true, solid: "#0ea5e9" },
+      { name: "MM Wall", slug: "mmwall", kind: "offerwall", comingSoon: true, solid: "#ef4444" },
+      { name: "AdGate", slug: "adgate", kind: "offerwall", comingSoon: true, solid: "#2dd4bf" },
+
+      {
+        name: "CPX Research",
+        slug: "cpx",
+        kind: "survey",
+        badge: "Recommended",
+        logo: "/partners/cpx.png",
+        solid: "#22c55e",
+      },
+    ],
+    []
+  );
+
+  const offerwalls = PARTNERS.filter((p) => p.kind === "offerwall");
+  const surveys = PARTNERS.filter((p) => p.kind === "survey");
+
+  const openPartner = async (p: Partner) => {
+    if (p.comingSoon) {
+      showToast(`${p.name} — Coming soon`);
+      return;
+    }
+
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push(`/login?next=/earn`);
+      return;
+    }
+
+    // ✅ CPX: eski otomatik açma (sayfa değil)
+    if (p.slug === "cpx") {
+      const res = await fetch(`/api/offerwall/cpx?user_id=${data.user.id}`);
+      const json = await res.json().catch(() => ({} as any));
+      if (json?.url) {
+        window.open(json.url, "_blank", "noopener,noreferrer");
+      } else {
+        showToast("Failed to open CPX");
+      }
+      return;
+    }
+
+    // diğer providerlar (ileride live olunca)
+    router.push(`/offerwall/${p.slug}`);
+  };
+
+  // UI (senin beğendiğin yeni tema)
+  const providersUi = [
+    { key: "lootably", name: "Lootably", accent: "cyan" as const, status: "coming" as const },
+    { key: "mmwall", name: "MM Wall", accent: "red" as const, status: "coming" as const },
+    { key: "adgate", name: "AdGate", accent: "teal" as const, status: "coming" as const },
   ];
 
   return (
@@ -70,6 +136,16 @@ export default function EarnPage() {
         <div className="absolute inset-0 bg-[radial-gradient(60%_55%_at_50%_110%,rgba(120,255,220,0.07),transparent_65%)]" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/75" />
       </div>
+
+      {/* Toast */}
+      {toast ? (
+        <div className="fixed top-24 right-6 z-[9999]">
+          <div className="rounded-2xl bg-white/[0.06] ring-1 ring-white/10 backdrop-blur px-4 py-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+            <div className="text-sm font-semibold">{toast}</div>
+            <div className="text-xs text-white/60">This provider will be available soon.</div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Container */}
       <div className="relative z-10 px-6 lg:px-10 py-10">
@@ -92,7 +168,7 @@ export default function EarnPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-5">
-              {providers.map((p) => (
+              {providersUi.map((p) => (
                 <CardShell key={p.key} className="p-5">
                   <AccentBar accent={p.accent} />
 
@@ -107,7 +183,7 @@ export default function EarnPage() {
 
                     <div className="flex-1">
                       <div className="text-lg font-bold">{p.name}</div>
-                      <div className="text-xs text-white/45">{p.note}</div>
+                      <div className="text-xs text-white/45">Coming soon</div>
                     </div>
 
                     <span className="text-xs text-white/60 rounded-full bg-white/[0.03] ring-1 ring-white/10 px-3 py-1">
@@ -143,19 +219,15 @@ export default function EarnPage() {
                       CPX
                     </div>
                     <div>
-                      <div className="text-lg font-extrabold tracking-tight">
-                        CPX RESEARCH
-                      </div>
-                      <div className="text-xs text-white/50">
-                        High quality surveys
-                      </div>
+                      <div className="text-lg font-extrabold tracking-tight">CPX RESEARCH</div>
+                      <div className="text-xs text-white/50">High quality surveys</div>
                     </div>
                   </div>
 
-                  {/* ✅ ÇALIŞAN BUTON */}
+                  {/* ✅ eski otomatik açma */}
                   <button
                     type="button"
-                    onClick={() => router.push("/offerwall")}
+                    onClick={() => openPartner(surveys[0])}
                     className="rounded-2xl bg-emerald-400 text-black px-5 py-3 font-semibold hover:opacity-90 transition"
                   >
                     Open
@@ -166,9 +238,12 @@ export default function EarnPage() {
                   <span className="inline-flex items-center rounded-full bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30 px-3 py-1 text-xs">
                     Recommended
                   </span>
-                  <span className="text-xs text-white/45">
-                    Earn coins instantly after completion.
-                  </span>
+                  <span className="text-xs text-white/45">Earn coins instantly after completion.</span>
+                </div>
+
+                {/* küçük not: login yoksa yönlendirir */}
+                <div className="mt-4 text-xs text-white/40">
+                  Opens CPX in a new tab using your account ID.
                 </div>
               </CardShell>
 
@@ -180,9 +255,7 @@ export default function EarnPage() {
                       +
                     </div>
                     <div>
-                      <div className="text-lg font-extrabold tracking-tight">
-                        More partners
-                      </div>
+                      <div className="text-lg font-extrabold tracking-tight">More partners</div>
                       <div className="text-xs text-white/50">Coming soon</div>
                     </div>
                   </div>
@@ -192,11 +265,14 @@ export default function EarnPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 text-xs text-white/45">
-                  We’ll add more survey providers here.
-                </div>
+                <div className="mt-4 text-xs text-white/45">We’ll add more survey providers here.</div>
               </CardShell>
             </div>
+          </div>
+
+          {/* Hidden list still exists (future-proof) */}
+          <div className="hidden">
+            {offerwalls.length} {surveys.length}
           </div>
         </div>
       </div>
