@@ -205,3 +205,39 @@ body {
 html, body {
   overflow-x: hidden;
 }
+* { -webkit-tap-highlight-color: transparent; }
+a, button { outline: none; }
+a:focus, a:active, button:focus, button:active { outline: none; }
+/* ==== KÖK ÇÖZÜM: tüm focus/ring/çizgi efektlerini kapat ==== */
+*:focus,
+*:focus-visible,
+*:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Linklerde underline/çizgi olmasın */
+a,
+a:hover,
+a:focus,
+a:active,
+a:focus-visible {
+  text-decoration: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Mobil/Chrome tıklama highlight’ını kapat */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* (Opsiyonel) Metin caret/“imleç çizgisi” gibi bir şey görünüyorsa */
+html,
+body {
+  caret-color: transparent;
+}
+input,
+textarea {
+  caret-color: auto;
+}

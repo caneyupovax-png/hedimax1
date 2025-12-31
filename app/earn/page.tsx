@@ -91,10 +91,7 @@ export default function EarnPage() {
                   key={p.slug}
                   className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-5"
                 >
-                  <div
-                    className="h-[3px] w-full rounded-full"
-                    style={{ background: p.color }}
-                  />
+                  <div className="h-[3px] w-full rounded-full" style={{ background: p.color }} />
 
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -103,9 +100,7 @@ export default function EarnPage() {
                       </div>
                       <div>
                         <div className="font-semibold">{p.name}</div>
-                        <div className="text-xs text-white/45">
-                          Coming soon
-                        </div>
+                        <div className="text-xs text-white/45">Coming soon</div>
                       </div>
                     </div>
 
@@ -133,10 +128,15 @@ export default function EarnPage() {
 
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* CPX */}
-              <div className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
-                <div className="flex items-center justify-between">
+              <div
+                className={[
+                  "group rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6",
+                  "transition hover:bg-white/[0.03] hover:ring-white/15",
+                ].join(" ")}
+              >
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="relative h-11 w-11 rounded-xl bg-white overflow-hidden">
+                    <div className="relative h-11 w-11 rounded-xl bg-white overflow-hidden ring-1 ring-white/15">
                       <Image
                         src="/partners/cpx.png"
                         alt="CPX Research"
@@ -146,18 +146,26 @@ export default function EarnPage() {
                       />
                     </div>
                     <div>
-                      <div className="font-extrabold tracking-tight">
-                        CPX RESEARCH
-                      </div>
-                      <div className="text-xs text-white/50">
-                        High quality surveys
-                      </div>
+                      <div className="font-extrabold tracking-tight">CPX RESEARCH</div>
+                      <div className="text-xs text-white/50">High quality surveys</div>
                     </div>
                   </div>
 
+                  {/* ✅ HER ZAMAN GÖZÜKÜR */}
                   <button
+                    type="button"
                     onClick={openCPX}
-                    className="rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black hover:opacity-90 transition"
+                    className={[
+                      "rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black",
+                      "transition",
+                      // ✅ hover’da basılabilir olduğu belli olsun
+                      "group-hover:scale-[1.03] group-hover:shadow-[0_12px_40px_rgba(16,185,129,0.35)]",
+                      "hover:opacity-95",
+                      // ✅ slash/çizgi olmasın
+                      "focus:outline-none focus-visible:outline-none active:scale-[0.99]",
+                      // ✅ imleç
+                      "cursor-pointer",
+                    ].join(" ")}
                   >
                     Open
                   </button>
@@ -182,9 +190,7 @@ export default function EarnPage() {
                     </div>
                     <div>
                       <div className="font-semibold">More partners</div>
-                      <div className="text-xs text-white/45">
-                        Coming soon
-                      </div>
+                      <div className="text-xs text-white/45">Coming soon</div>
                     </div>
                   </div>
 
