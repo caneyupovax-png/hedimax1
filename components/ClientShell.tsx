@@ -57,12 +57,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         onModeChange={(m) => openAuth(m)}
       />
 
-      {/* 🔥 ARTIK SITE FULL WIDTH */}
-      <main className="min-h-[calc(100vh-64px)] w-full">
-        <div key={pathname} className="page-transition w-full">
-          {children}
-        </div>
-      </main>
+      {children}
     </>
   );
 }
