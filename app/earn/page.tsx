@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type Accent = "cyan" | "red" | "teal" | "green";
 
@@ -20,7 +20,6 @@ function AccentBar({ accent }: { accent: Accent }) {
     teal: "from-teal-300/80 to-teal-300/0",
     green: "from-emerald-400/80 to-emerald-400/0",
   };
-
   return <div className={`h-[3px] w-full rounded-full bg-gradient-to-r ${map[accent]}`} />;
 }
 
@@ -54,6 +53,8 @@ function Pill({ children }: { children: React.ReactNode }) {
 }
 
 export default function EarnPage() {
+  const router = useRouter();
+
   const providers: ProviderCard[] = [
     { key: "lootably", name: "Lootably", accent: "cyan", status: "coming", note: "Coming soon" },
     { key: "mmwall", name: "MM Wall", accent: "red", status: "coming", note: "Coming soon" },
@@ -70,7 +71,7 @@ export default function EarnPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/75" />
       </div>
 
-      {/* ✅ Earn’e özel container: sayfa full width, içerik düzenli */}
+      {/* Container */}
       <div className="relative z-10 px-6 lg:px-10 py-10">
         <div className="mx-auto w-full max-w-7xl">
           {/* Header */}
@@ -80,23 +81,6 @@ export default function EarnPage() {
               <p className="mt-1 text-sm text-white/60">
                 Complete offers and surveys to earn coins.
               </p>
-            </div>
-
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                className="h-10 w-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/10 hover:bg-white/[0.06] transition"
-                type="button"
-                aria-label="Previous"
-              >
-                ‹
-              </button>
-              <button
-                className="h-10 w-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/10 hover:bg-white/[0.06] transition"
-                type="button"
-                aria-label="Next"
-              >
-                ›
-              </button>
             </div>
           </div>
 
@@ -155,21 +139,27 @@ export default function EarnPage() {
               <CardShell className="p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center">
-                      <span className="text-base font-black">CPX</span>
+                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-black">
+                      CPX
                     </div>
                     <div>
-                      <div className="text-lg font-extrabold tracking-tight">CPX RESEARCH</div>
-                      <div className="text-xs text-white/50">High quality surveys</div>
+                      <div className="text-lg font-extrabold tracking-tight">
+                        CPX RESEARCH
+                      </div>
+                      <div className="text-xs text-white/50">
+                        High quality surveys
+                      </div>
                     </div>
                   </div>
 
-                  <Link
-                    href="/offerwall"
+                  {/* ✅ ÇALIŞAN BUTON */}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/offerwall")}
                     className="rounded-2xl bg-emerald-400 text-black px-5 py-3 font-semibold hover:opacity-90 transition"
                   >
                     Open
-                  </Link>
+                  </button>
                 </div>
 
                 <div className="mt-4 flex items-center gap-2">
@@ -182,15 +172,17 @@ export default function EarnPage() {
                 </div>
               </CardShell>
 
-              {/* Placeholder partner (future) */}
+              {/* Placeholder */}
               <CardShell className="p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center">
-                      <span className="text-base font-black">+</span>
+                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-black">
+                      +
                     </div>
                     <div>
-                      <div className="text-lg font-extrabold tracking-tight">More partners</div>
+                      <div className="text-lg font-extrabold tracking-tight">
+                        More partners
+                      </div>
                       <div className="text-xs text-white/50">Coming soon</div>
                     </div>
                   </div>
