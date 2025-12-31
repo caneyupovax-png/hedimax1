@@ -1,62 +1,17 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-type Accent = "cyan" | "red" | "teal" | "green";
-type Kind = "offerwall" | "survey";
-
-type Partner = {
+type Provider = {
   name: string;
   slug: string;
-  kind: Kind;
+  color: string;
   comingSoon?: boolean;
-  badge?: string;
-  logo?: string;
-  solid?: string;
 };
-
-function AccentBar({ accent }: { accent: Accent }) {
-  const map: Record<Accent, string> = {
-    cyan: "from-cyan-400/80 to-cyan-400/0",
-    red: "from-red-400/80 to-red-400/0",
-    teal: "from-teal-300/80 to-teal-300/0",
-    green: "from-emerald-400/80 to-emerald-400/0",
-  };
-  return <div className={`h-[3px] w-full rounded-full bg-gradient-to-r ${map[accent]}`} />;
-}
-
-function CardShell({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={[
-        "rounded-3xl bg-white/[0.02] backdrop-blur-2xl",
-        "shadow-[0_30px_80px_rgba(0,0,0,0.35)]",
-        "ring-1 ring-white/10",
-        className,
-      ].join(" ")}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-white/[0.03] ring-1 ring-white/10 px-3 py-1 text-xs text-white/70">
-      {children}
-    </span>
-  );
-}
 
 export default function EarnPage() {
   const router = useRouter();
@@ -67,212 +22,182 @@ export default function EarnPage() {
 
   const showToast = (msg: string) => {
     setToast(msg);
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(""), 2200);
   };
 
-  const PARTNERS: Partner[] = useMemo(
-    () => [
-      { name: "Lootably", slug: "lootably", kind: "offerwall", comingSoon: true, solid: "#0ea5e9" },
-      { name: "MM Wall", slug: "mmwall", kind: "offerwall", comingSoon: true, solid: "#ef4444" },
-      { name: "AdGate", slug: "adgate", kind: "offerwall", comingSoon: true, solid: "#2dd4bf" },
-
-      {
-        name: "CPX Research",
-        slug: "cpx",
-        kind: "survey",
-        badge: "Recommended",
-        logo: "/partners/cpx.png",
-        solid: "#22c55e",
-      },
-    ],
-    []
-  );
-
-  const offerwalls = PARTNERS.filter((p) => p.kind === "offerwall");
-  const surveys = PARTNERS.filter((p) => p.kind === "survey");
-
-  const openPartner = async (p: Partner) => {
-    if (p.comingSoon) {
-      showToast(`${p.name} — Coming soon`);
-      return;
-    }
-
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      router.push(`/login?next=/earn`);
-      return;
-    }
-
-    // ✅ CPX: eski otomatik açma (sayfa değil)
-    if (p.slug === "cpx") {
-      const res = await fetch(`/api/offerwall/cpx?user_id=${data.user.id}`);
-      const json = await res.json().catch(() => ({} as any));
-      if (json?.url) {
-        window.open(json.url, "_blank", "noopener,noreferrer");
-      } else {
-        showToast("Failed to open CPX");
-      }
-      return;
-    }
-
-    // diğer providerlar (ileride live olunca)
-    router.push(`/offerwall/${p.slug}`);
-  };
-
-  // UI (senin beğendiğin yeni tema)
-  const providersUi = [
-    { key: "lootably", name: "Lootably", accent: "cyan" as const, status: "coming" as const },
-    { key: "mmwall", name: "MM Wall", accent: "red" as const, status: "coming" as const },
-    { key: "adgate", name: "AdGate", accent: "teal" as const, status: "coming" as const },
+  const providers: Provider[] = [
+    { name: "Lootably", slug: "lootably", color: "#22d3ee", comingSoon: true },
+    { name: "MM Wall", slug: "mmwall", color: "#ef4444", comingSoon: true },
+    { name: "AdGate", slug: "adgate", color: "#2dd4bf", comingSoon: true },
   ];
 
+  const openCPX = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push("/login?next=/earn");
+      return;
+    }
+
+    const res = await fetch(`/api/offerwall/cpx?user_id=${data.user.id}`);
+    const json = await res.json().catch(() => ({} as any));
+
+    if (json?.url) {
+      window.open(json.url, "_blank", "noopener,noreferrer");
+    } else {
+      showToast("Failed to open CPX");
+    }
+  };
+
   return (
-    <div className="min-h-screen w-full text-white relative overflow-hidden bg-[#070A12]">
-      {/* Background */}
+    <div className="min-h-screen w-full bg-[#070A12] text-white relative overflow-hidden">
+      {/* background */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(90%_70%_at_18%_12%,rgba(130,160,255,0.16),transparent_62%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(70%_55%_at_88%_30%,rgba(255,255,255,0.08),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(60%_55%_at_50%_110%,rgba(120,255,220,0.07),transparent_65%)]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/75" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black/80" />
       </div>
 
-      {/* Toast */}
-      {toast ? (
-        <div className="fixed top-24 right-6 z-[9999]">
-          <div className="rounded-2xl bg-white/[0.06] ring-1 ring-white/10 backdrop-blur px-4 py-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-            <div className="text-sm font-semibold">{toast}</div>
-            <div className="text-xs text-white/60">This provider will be available soon.</div>
+      {/* toast */}
+      {toast && (
+        <div className="fixed top-24 right-6 z-50">
+          <div className="rounded-xl bg-black/70 ring-1 ring-white/10 px-4 py-3 text-sm">
+            {toast}
           </div>
         </div>
-      ) : null}
+      )}
 
-      {/* Container */}
       <div className="relative z-10 px-6 lg:px-10 py-10">
         <div className="mx-auto w-full max-w-7xl">
-          {/* Header */}
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">Earn</h1>
-              <p className="mt-1 text-sm text-white/60">
-                Complete offers and surveys to earn coins.
-              </p>
-            </div>
+          {/* header */}
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">Earn</h1>
+            <p className="mt-1 text-sm text-white/60">
+              Complete offers and surveys to earn coins.
+            </p>
           </div>
 
-          {/* Providers */}
-          <div className="mt-8">
-            <div className="flex items-center justify-between gap-3">
+          {/* PROVIDERS */}
+          <div className="mt-10">
+            <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Providers</h2>
-              <Pill>Offerwalls</Pill>
+              <span className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-white/70">
+                Offerwalls
+              </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-5">
-              {providersUi.map((p) => (
-                <CardShell key={p.key} className="p-5">
-                  <AccentBar accent={p.accent} />
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {providers.map((p) => (
+                <div
+                  key={p.slug}
+                  className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-5"
+                >
+                  <div
+                    className="h-[3px] w-full rounded-full"
+                    style={{ background: p.color }}
+                  />
 
-                  <div className="mt-4 flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-bold">
-                      {p.name
-                        .split(" ")
-                        .map((x) => x[0])
-                        .slice(0, 2)
-                        .join("")}
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-bold">
+                        {p.name[0]}
+                      </div>
+                      <div>
+                        <div className="font-semibold">{p.name}</div>
+                        <div className="text-xs text-white/45">
+                          Coming soon
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex-1">
-                      <div className="text-lg font-bold">{p.name}</div>
-                      <div className="text-xs text-white/45">Coming soon</div>
-                    </div>
-
-                    <span className="text-xs text-white/60 rounded-full bg-white/[0.03] ring-1 ring-white/10 px-3 py-1">
+                    <span className="text-xs text-white/50 rounded-full bg-white/[0.03] px-3 py-1 ring-1 ring-white/10">
                       Soon
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled
-                    className="mt-5 w-full rounded-2xl bg-white/[0.04] ring-1 ring-white/10 text-white/45 py-3 font-semibold cursor-not-allowed"
-                  >
+                  <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
                     Coming soon
-                  </button>
-                </CardShell>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
 
-          {/* Survey Partners */}
-          <div className="mt-10">
-            <div className="flex items-center justify-between gap-3">
+          {/* SURVEYS */}
+          <div className="mt-14">
+            <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Survey Partners</h2>
-              <Pill>Surveys</Pill>
+              <span className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-white/70">
+                Surveys
+              </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* CPX Research */}
-              <CardShell className="p-6">
-                <div className="flex items-center justify-between gap-4">
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* CPX */}
+              <div className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-black">
-                      CPX
+                    <div className="relative h-11 w-11 rounded-xl bg-white overflow-hidden">
+                      <Image
+                        src="/partners/cpx.png"
+                        alt="CPX Research"
+                        fill
+                        className="object-contain p-1"
+                        priority
+                      />
                     </div>
                     <div>
-                      <div className="text-lg font-extrabold tracking-tight">CPX RESEARCH</div>
-                      <div className="text-xs text-white/50">High quality surveys</div>
+                      <div className="font-extrabold tracking-tight">
+                        CPX RESEARCH
+                      </div>
+                      <div className="text-xs text-white/50">
+                        High quality surveys
+                      </div>
                     </div>
                   </div>
 
-                  {/* ✅ eski otomatik açma */}
                   <button
-                    type="button"
-                    onClick={() => openPartner(surveys[0])}
-                    className="rounded-2xl bg-emerald-400 text-black px-5 py-3 font-semibold hover:opacity-90 transition"
+                    onClick={openCPX}
+                    className="rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black hover:opacity-90 transition"
                   >
                     Open
                   </button>
                 </div>
 
                 <div className="mt-4 flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-full bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30 px-3 py-1 text-xs">
+                  <span className="rounded-full bg-emerald-400/15 text-emerald-200 px-3 py-1 text-xs ring-1 ring-emerald-400/30">
                     Recommended
                   </span>
-                  <span className="text-xs text-white/45">Earn coins instantly after completion.</span>
+                  <span className="text-xs text-white/45">
+                    Earn coins instantly after completion.
+                  </span>
                 </div>
+              </div>
 
-                {/* küçük not: login yoksa yönlendirir */}
-                <div className="mt-4 text-xs text-white/40">
-                  Opens CPX in a new tab using your account ID.
-                </div>
-              </CardShell>
-
-              {/* Placeholder */}
-              <CardShell className="p-6">
-                <div className="flex items-center justify-between gap-4">
+              {/* MORE */}
+              <div className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-black">
+                    <div className="h-11 w-11 rounded-xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-bold">
                       +
                     </div>
                     <div>
-                      <div className="text-lg font-extrabold tracking-tight">More partners</div>
-                      <div className="text-xs text-white/50">Coming soon</div>
+                      <div className="font-semibold">More partners</div>
+                      <div className="text-xs text-white/45">
+                        Coming soon
+                      </div>
                     </div>
                   </div>
 
-                  <span className="rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-5 py-3 text-sm text-white/50">
+                  <span className="rounded-full bg-white/[0.03] px-4 py-2 text-xs text-white/50 ring-1 ring-white/10">
                     Soon
                   </span>
                 </div>
 
-                <div className="mt-4 text-xs text-white/45">We’ll add more survey providers here.</div>
-              </CardShell>
+                <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
+                  Coming soon
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* Hidden list still exists (future-proof) */}
-          <div className="hidden">
-            {offerwalls.length} {surveys.length}
           </div>
         </div>
       </div>
