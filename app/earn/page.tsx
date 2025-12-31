@@ -1,268 +1,213 @@
 "use client";
+export const dynamic = "force-dynamic";
 
-import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import Link from "next/link";
 
-type Partner = {
+type Accent = "cyan" | "red" | "teal" | "green";
+
+type ProviderCard = {
+  key: string;
   name: string;
-  slug: string;
-  kind: "offerwall" | "survey";
-  comingSoon?: boolean;
-  badge?: string;
-  logo?: string;
-  solid?: string;
+  accent: Accent;
+  status: "coming" | "live";
+  note?: string;
 };
 
-/* ----------------------------- helpers ----------------------------- */
-function getMarkText(name: string) {
-  const safe = (name || "").trim();
-  if (!safe) return "X";
-  const words = safe.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return safe.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase() || "X";
-}
-
-function svgWordmarkDataUri(label: string, accent = "#22c55e") {
-  const mark = getMarkText(label);
-  const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="360" height="128" viewBox="0 0 360 128">
-    <rect width="360" height="128" rx="26" fill="rgba(255,255,255,0.08)"/>
-    <rect x="1" y="1" width="358" height="126" rx="25"
-      fill="rgba(0,0,0,0.22)" stroke="rgba(255,255,255,0.12)"/>
-    <rect x="14" y="14" width="332" height="6" rx="3" fill="${accent}" opacity="0.85"/>
-    <rect x="26" y="40" width="48" height="48" rx="16" fill="${accent}"/>
-    <text x="50" y="71" text-anchor="middle" font-family="Inter,system-ui,Arial" font-size="18" font-weight="900" fill="white">${mark}</text>
-    <text x="90" y="72" font-family="Inter,system-ui,Arial" font-size="24" font-weight="900" fill="white">${label}</text>
-  </svg>`.trim();
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-/* ------------------------------ page ------------------------------- */
-export default function EarnPage() {
-  const router = useRouter();
-  const supabase = createClient();
-
-  const [toast, setToast] = useState("");
-  const toastTimer = useRef<number | null>(null);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(""), 2200);
+function AccentBar({ accent }: { accent: Accent }) {
+  const map: Record<Accent, string> = {
+    cyan: "from-cyan-400/80 to-cyan-400/0",
+    red: "from-red-400/80 to-red-400/0",
+    teal: "from-teal-300/80 to-teal-300/0",
+    green: "from-emerald-400/80 to-emerald-400/0",
   };
 
-  const PARTNERS: Partner[] = useMemo(
-    () => [
-      { name: "Lootably", slug: "lootably", kind: "offerwall", comingSoon: true, solid: "#0ea5e9" },
-      { name: "MM Wall", slug: "mmwall", kind: "offerwall", comingSoon: true, solid: "#ef4444" },
-      { name: "AdGate", slug: "adgate", kind: "offerwall", comingSoon: true, solid: "#2dd4bf" },
-      { name: "Torox", slug: "torox", kind: "offerwall", comingSoon: true, solid: "#f97316" },
-      { name: "Notik", slug: "notik", kind: "offerwall", comingSoon: true, solid: "#64748b" },
-
-      {
-        name: "CPX Research",
-        slug: "cpx",
-        kind: "survey",
-        badge: "Recommended",
-        logo: "/partners/cpx.png",
-        solid: "#22c55e",
-      },
-    ],
-    []
-  );
-
-  const offerwalls = PARTNERS.filter((p) => p.kind === "offerwall");
-  const surveys = PARTNERS.filter((p) => p.kind === "survey");
-
-  const openPartner = async (p: Partner) => {
-    if (p.comingSoon) {
-      showToast(`${p.name} — Coming soon`);
-      return;
-    }
-
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      router.push(`/login?next=/earn`);
-      return;
-    }
-
-    if (p.slug === "cpx") {
-      const res = await fetch(`/api/offerwall/cpx?user_id=${data.user.id}`);
-      const json = await res.json().catch(() => ({} as any));
-      if (json?.url) window.open(json.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    router.push(`/offerwall/${p.slug}`);
-  };
-
-  return (
-    <div className="relative min-h-screen">
-      {/* FULLSCREEN BACKGROUND */}
-      <div className="fixed inset-0 -z-10">
-        <Image src="/bg/earn-bg.jpg" alt="Earn bg" fill priority className="object-cover" />
-        <div className="absolute inset-0 bg-black/65" />
-        <div className="absolute inset-0 [background:radial-gradient(900px_420px_at_50%_-80px,rgba(255,255,255,0.12),transparent_60%)]" />
-      </div>
-
-      {/* TOAST (navbar altına + üstte kalsın) */}
-      {toast ? (
-        <div className="fixed top-24 right-6 z-[9999]">
-          <div className="rounded-2xl border border-white/15 bg-black/55 backdrop-blur px-4 py-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-            <div className="text-sm font-semibold">{toast}</div>
-            <div className="text-xs text-white/60">This provider will be available soon.</div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* CONTENT */}
-      <div className="relative z-10 px-4 sm:px-6 lg:px-8">
-        <h2 className="mt-10 text-2xl font-extrabold text-white">Providers</h2>
-        <OfferwallCarousel items={offerwalls} onOpen={openPartner} />
-
-        <h2 className="mt-14 text-2xl font-extrabold text-white">Survey Partners</h2>
-
-        {/* ✅ Survey kartlarını da aynı 300px ritminde hizala */}
-        <div className="mt-5 flex flex-wrap gap-8">
-          {surveys.map((p) => (
-            <SurveyCard key={p.slug} p={p} onOpen={openPartner} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className={`h-[3px] w-full rounded-full bg-gradient-to-r ${map[accent]}`} />;
 }
 
-/* ------------------------------------------------------------------ */
-/* OFFERWALL CAROUSEL (NO HALF CARDS, MULTIPLE VISIBLE) */
-/* ------------------------------------------------------------------ */
-function OfferwallCarousel({ items, onOpen }: { items: Partner[]; onOpen: (p: Partner) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  const CARD_W = 300;
-  const GAP = 32; // gap-8
-  const STEP = CARD_W + GAP; // 332
-
+function CardShell({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="relative mt-6">
-      <div className="absolute -top-12 right-0 flex gap-2">
-        <button
-          type="button"
-          onClick={() => ref.current?.scrollBy({ left: -STEP, behavior: "smooth" })}
-          className="h-10 w-10 rounded-xl bg-white/[0.10] hover:bg-white/[0.18] text-white transition cursor-pointer"
-          aria-label="Prev"
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          onClick={() => ref.current?.scrollBy({ left: STEP, behavior: "smooth" })}
-          className="h-10 w-10 rounded-xl bg-white/[0.10] hover:bg-white/[0.18] text-white transition cursor-pointer"
-          aria-label="Next"
-        >
-          ›
-        </button>
-      </div>
-
-      <div
-        className="
-          mx-auto overflow-hidden
-          w-[300px]
-          md:w-[calc(300px*2+32px)]
-          lg:w-[calc(300px*3+64px)]
-          max-w-full
-        "
-      >
-        <div
-          ref={ref}
-          className="flex gap-8 overflow-x-auto scroll-smooth snap-x snap-mandatory
-          [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {items.map((p) => (
-            <button
-              key={p.slug}
-              type="button"
-              onClick={() => onOpen(p)}
-              className="flex-shrink-0 cursor-pointer group text-left snap-start [scroll-snap-stop:always]"
-              style={{ width: CARD_W }}
-              title={p.comingSoon ? "Coming soon" : "Open"}
-            >
-              <Image
-                src={svgWordmarkDataUri(p.name, p.solid)}
-                alt={p.name}
-                width={CARD_W}
-                height={110}
-                unoptimized
-                className="transition-transform group-hover:scale-[1.03]"
-              />
-              <div className="mt-2 text-center text-xs text-white/60">
-                {p.comingSoon ? "Coming soon" : "Open"}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* SURVEY CARD – CPX: same width as offerwalls, tidy alignment */
-/* ------------------------------------------------------------------ */
-function SurveyCard({ p, onOpen }: { p: Partner; onOpen: (p: Partner) => void }) {
-  const isCpx = p.slug === "cpx";
-  const [ok, setOk] = useState(true);
-
-  const fallback = svgWordmarkDataUri(p.name, p.solid || "#22c55e");
-  const src = ok && p.logo ? p.logo : fallback;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(p)}
-      title="Open"
-      className="
-        w-[300px] max-w-full text-left
-        rounded-3xl bg-white/[0.05] backdrop-blur
-        border border-white/10 hover:border-white/20 hover:bg-white/[0.07]
-        transition cursor-pointer shadow-[0_18px_60px_rgba(0,0,0,0.25)]
-        p-4
-      "
+    <div
+      className={[
+        "rounded-3xl bg-white/[0.02] backdrop-blur-2xl",
+        "shadow-[0_30px_80px_rgba(0,0,0,0.35)]",
+        "ring-1 ring-white/10",
+        className,
+      ].join(" ")}
     >
-      {isCpx ? (
-        <div>
-          {/* ✅ daha kompakt logo alanı */}
-          <div className="relative w-full h-[44px]">
-            <Image
-              src={src}
-              alt="CPX Research"
-              fill
-              className="object-contain invert brightness-200 contrast-200"
-              onError={() => setOk(false)}
-              unoptimized={src.startsWith("data:image")}
-            />
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-white/[0.03] ring-1 ring-white/10 px-3 py-1 text-xs text-white/70">
+      {children}
+    </span>
+  );
+}
+
+export default function EarnPage() {
+  const providers: ProviderCard[] = [
+    { key: "lootably", name: "Lootably", accent: "cyan", status: "coming", note: "Coming soon" },
+    { key: "mmwall", name: "MM Wall", accent: "red", status: "coming", note: "Coming soon" },
+    { key: "adgate", name: "AdGate", accent: "teal", status: "coming", note: "Coming soon" },
+  ];
+
+  return (
+    <div className="min-h-screen w-full text-white relative overflow-hidden bg-[#070A12]">
+      {/* Background */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(90%_70%_at_18%_12%,rgba(130,160,255,0.16),transparent_62%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(70%_55%_at_88%_30%,rgba(255,255,255,0.08),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(60%_55%_at_50%_110%,rgba(120,255,220,0.07),transparent_65%)]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/75" />
+      </div>
+
+      {/* ✅ Earn’e özel container: sayfa full width, içerik düzenli */}
+      <div className="relative z-10 px-6 lg:px-10 py-10">
+        <div className="mx-auto w-full max-w-7xl">
+          {/* Header */}
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight">Earn</h1>
+              <p className="mt-1 text-sm text-white/60">
+                Complete offers and surveys to earn coins.
+              </p>
+            </div>
+
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                className="h-10 w-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/10 hover:bg-white/[0.06] transition"
+                type="button"
+                aria-label="Previous"
+              >
+                ‹
+              </button>
+              <button
+                className="h-10 w-10 rounded-2xl bg-white/[0.03] ring-1 ring-white/10 hover:bg-white/[0.06] transition"
+                type="button"
+                aria-label="Next"
+              >
+                ›
+              </button>
+            </div>
           </div>
 
-          {/* ✅ Recommended + Open aynı hizada, boşluk az */}
-          <div className="mt-3 flex items-center justify-between gap-3">
-            {p.badge ? (
-              <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">
-                {p.badge}
-              </span>
-            ) : (
-              <span />
-            )}
+          {/* Providers */}
+          <div className="mt-8">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-bold">Providers</h2>
+              <Pill>Offerwalls</Pill>
+            </div>
 
-            <span className="btn-primary">Open</span>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-5">
+              {providers.map((p) => (
+                <CardShell key={p.key} className="p-5">
+                  <AccentBar accent={p.accent} />
+
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-bold">
+                      {p.name
+                        .split(" ")
+                        .map((x) => x[0])
+                        .slice(0, 2)
+                        .join("")}
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="text-lg font-bold">{p.name}</div>
+                      <div className="text-xs text-white/45">{p.note}</div>
+                    </div>
+
+                    <span className="text-xs text-white/60 rounded-full bg-white/[0.03] ring-1 ring-white/10 px-3 py-1">
+                      Soon
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-5 w-full rounded-2xl bg-white/[0.04] ring-1 ring-white/10 text-white/45 py-3 font-semibold cursor-not-allowed"
+                  >
+                    Coming soon
+                  </button>
+                </CardShell>
+              ))}
+            </div>
+          </div>
+
+          {/* Survey Partners */}
+          <div className="mt-10">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-bold">Survey Partners</h2>
+              <Pill>Surveys</Pill>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* CPX Research */}
+              <CardShell className="p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center">
+                      <span className="text-base font-black">CPX</span>
+                    </div>
+                    <div>
+                      <div className="text-lg font-extrabold tracking-tight">CPX RESEARCH</div>
+                      <div className="text-xs text-white/50">High quality surveys</div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/offerwall"
+                    className="rounded-2xl bg-emerald-400 text-black px-5 py-3 font-semibold hover:opacity-90 transition"
+                  >
+                    Open
+                  </Link>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30 px-3 py-1 text-xs">
+                    Recommended
+                  </span>
+                  <span className="text-xs text-white/45">
+                    Earn coins instantly after completion.
+                  </span>
+                </div>
+              </CardShell>
+
+              {/* Placeholder partner (future) */}
+              <CardShell className="p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center">
+                      <span className="text-base font-black">+</span>
+                    </div>
+                    <div>
+                      <div className="text-lg font-extrabold tracking-tight">More partners</div>
+                      <div className="text-xs text-white/50">Coming soon</div>
+                    </div>
+                  </div>
+
+                  <span className="rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-5 py-3 text-sm text-white/50">
+                    Soon
+                  </span>
+                </div>
+
+                <div className="mt-4 text-xs text-white/45">
+                  We’ll add more survey providers here.
+                </div>
+              </CardShell>
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="flex items-center justify-between gap-4">
-          <span className="btn-primary">Open</span>
-        </div>
-      )}
-    </button>
+      </div>
+    </div>
   );
 }
