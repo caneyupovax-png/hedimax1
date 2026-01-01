@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import ClientShell from "@/components/ClientShell";
 import Footer from "@/components/Footer";
+import RouteTransition from "@/components/RouteTransition";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,13 +12,18 @@ export const metadata: Metadata = {
   description: "Earn rewards • Cash out fast",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body
         className="bg-black text-white overflow-x-hidden overscroll-x-none"
         suppressHydrationWarning
       >
+        <RouteTransition />
         <ClientShell>
           <div className="min-h-dvh flex flex-col">
             <main className="flex-1 min-h-0">{children}</main>
