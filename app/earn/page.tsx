@@ -198,14 +198,8 @@ export default function EarnPage() {
                     Soon
                   </span>
                 </div>
-import Link from "next/link";
 
-<Link href="/gemiwall" className="btn-primary">
-  Open GemiWall
-</Link>
-
-
-                <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
+               <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
                   Coming soon
                 </div>
               </div>
