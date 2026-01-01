@@ -8,33 +8,76 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function toInt(v: string | null) {
-  const n = v ? Number(v) : NaN;
+function toInt(v: any) {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
   return Number.isFinite(n) ? Math.floor(n) : null;
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+function pick(obj: any, keys: string[]) {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null && String(v) !== "") return v;
+  }
+  return null;
+}
 
-  // Panelde makro isimleri farklı olabilir; gerekirse ekleriz
-  const userId = searchParams.get("user_id") || searchParams.get("userId") || "";
-  const amount = toInt(searchParams.get("amount") || searchParams.get("AMOUNT") || searchParams.get("reward"));
-  const txid =
-    searchParams.get("transaction_id") ||
-    searchParams.get("transactionId") ||
-    searchParams.get("txid") ||
-    "";
+async function handle(req: Request) {
+  const url = new URL(req.url);
 
-  if (!userId || amount === null || amount <= 0) {
-    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+  // Query params
+  const q: Record<string, any> = {};
+  url.searchParams.forEach((v, k) => (q[k] = v));
+
+  // Body params (if POST)
+  let body: any = {};
+  if (req.method === "POST") {
+    const ct = req.headers.get("content-type") || "";
+    try {
+      if (ct.includes("application/json")) body = await req.json();
+      else if (ct.includes("application/x-www-form-urlencoded")) {
+        const txt = await req.text();
+        const sp = new URLSearchParams(txt);
+        sp.forEach((v, k) => (body[k] = v));
+      }
+    } catch {}
   }
 
-  // ✅ Eğer transaction_id yoksa testte sorun değil, ama üretimde olmalı
-  // (Duplicate engeli için). Şimdilik zorunlu yapmıyorum.
-  // İstersen zorunlu yaparız:
-  // if (!txid) return NextResponse.json({ ok:false, error:"missing_txid" }, { status:400 });
+  // Merge (body wins)
+  const p = { ...q, ...body };
 
-  // points_balance tablosunda en doğru kolon genelde user_id
+  const userId = String(
+    pick(p, ["user_id", "userId", "USER_ID", "userid", "uid", "sub_id", "subId"]) || ""
+  );
+
+  // Reward / amount
+  const amountRaw = pick(p, [
+    "amount",
+    "reward",
+    "Reward",
+    "REWARD",
+    "virtual_currency",
+    "virtualCurrency",
+    "coins",
+    "points",
+    "vc",
+  ]);
+  const amount = toInt(amountRaw);
+
+  const txid = String(
+    pick(p, ["transaction_id", "transactionId", "TRANSACTION_ID", "txid", "event_id", "eventId", "click_id"]) || ""
+  );
+
+  const status = String(pick(p, ["status", "Status"]) || "");
+
+  // Often tests send status = Completed; we accept empty too
+  if (!userId || amount === null || amount <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "bad_request", userId, amount, txid, status, received: p },
+      { status: 400 }
+    );
+  }
+
+  // ✅ Update points_balance by user_id
   const { data: row, error: readErr } = await supabaseAdmin
     .from("points_balance")
     .select("balance")
@@ -56,5 +99,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, user_id: userId, added: amount, balance: next, txid });
+  // ✅ Return plain OK too (some providers require 200 OK only)
+  return NextResponse.json({ ok: true, user_id: userId, added: amount, balance: next, txid, status });
+}
+
+export async function GET(req: Request) {
+  return handle(req);
+}
+
+export async function POST(req: Request) {
+  return handle(req);
 }
