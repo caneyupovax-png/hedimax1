@@ -49,6 +49,27 @@ export default function EarnPage() {
     }
   };
 
+  // ✅ NEW: GemiWall open
+  const openGemiWall = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push("/login?next=/earn");
+      return;
+    }
+
+    const placementId = process.env.NEXT_PUBLIC_GEMIWALL_PLACEMENT_ID;
+    if (!placementId) {
+      showToast("Missing env: NEXT_PUBLIC_GEMIWALL_PLACEMENT_ID");
+      return;
+    }
+
+    const url = `https://gemiwall.com/${encodeURIComponent(
+      placementId
+    )}/${encodeURIComponent(data.user.id)}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#070A12] text-white relative overflow-hidden">
       {/* background */}
@@ -158,12 +179,9 @@ export default function EarnPage() {
                     className={[
                       "rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black",
                       "transition",
-                      // ✅ hover’da basılabilir olduğu belli olsun
                       "group-hover:scale-[1.03] group-hover:shadow-[0_12px_40px_rgba(16,185,129,0.35)]",
                       "hover:opacity-95",
-                      // ✅ slash/çizgi olmasın
                       "focus:outline-none focus-visible:outline-none active:scale-[0.99]",
-                      // ✅ imleç
                       "cursor-pointer",
                     ].join(" ")}
                   >
@@ -177,6 +195,51 @@ export default function EarnPage() {
                   </span>
                   <span className="text-xs text-white/45">
                     Earn coins instantly after completion.
+                  </span>
+                </div>
+              </div>
+
+              {/* ✅ NEW: GEMIWALL */}
+              <div
+                className={[
+                  "group rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6",
+                  "transition hover:bg-white/[0.03] hover:ring-white/15",
+                ].join(" ")}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-extrabold">
+                      G
+                    </div>
+                    <div>
+                      <div className="font-extrabold tracking-tight">GEMIWALL</div>
+                      <div className="text-xs text-white/50">Offers & rewards</div>
+                    </div>
+                  </div>
+
+                  {/* ✅ HER ZAMAN GÖZÜKÜR */}
+                  <button
+                    type="button"
+                    onClick={openGemiWall}
+                    className={[
+                      "rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black",
+                      "transition",
+                      "group-hover:scale-[1.03] group-hover:shadow-[0_12px_40px_rgba(16,185,129,0.35)]",
+                      "hover:opacity-95",
+                      "focus:outline-none focus-visible:outline-none active:scale-[0.99]",
+                      "cursor-pointer",
+                    ].join(" ")}
+                  >
+                    Open
+                  </button>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="rounded-full bg-white/[0.04] text-white/75 px-3 py-1 text-xs ring-1 ring-white/10">
+                    Offerwall
+                  </span>
+                  <span className="text-xs text-white/45">
+                    Complete offers to earn coins.
                   </span>
                 </div>
               </div>
@@ -199,7 +262,7 @@ export default function EarnPage() {
                   </span>
                 </div>
 
-               <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
+                <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
                   Coming soon
                 </div>
               </div>
