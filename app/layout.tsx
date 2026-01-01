@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import ClientShell from "@/components/ClientShell";
 import Footer from "@/components/Footer";
-import RouteTransition from "@/components/RouteTransition";
+import PageTransition from "@/components/PageTransition";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,10 +23,11 @@ export default function RootLayout({
         className="bg-black text-white overflow-x-hidden overscroll-x-none"
         suppressHydrationWarning
       >
-        <RouteTransition />
         <ClientShell>
           <div className="min-h-dvh flex flex-col">
-            <main className="flex-1 min-h-0">{children}</main>
+            <main className="flex-1 min-h-0">
+              <PageTransition>{children}</PageTransition>
+            </main>
             <Footer />
           </div>
         </ClientShell>
