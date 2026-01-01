@@ -49,7 +49,6 @@ export default function EarnPage() {
     }
   };
 
-  // ✅ NEW: GemiWall open
   const openGemiWall = async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
@@ -71,12 +70,17 @@ export default function EarnPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#070A12] text-white relative overflow-hidden">
-      {/* background */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(90%_70%_at_18%_12%,rgba(130,160,255,0.16),transparent_62%)]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black/80" />
-      </div>
+    <div className="min-h-screen w-full text-white relative overflow-hidden">
+      {/* ✅ BACKGROUND IMAGE */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage: "url('/bg/earn-bg.png')",
+        }}
+      />
+
+      {/* overlay */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/60 to-black/85" />
 
       {/* toast */}
       {toast && (
@@ -107,12 +111,53 @@ export default function EarnPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* GEMIWALL */}
+              <div
+                onClick={openGemiWall}
+                className="
+                  group cursor-pointer
+                  rounded-3xl bg-white/[0.02]
+                  ring-1 ring-white/10 backdrop-blur-xl p-5
+                  transition
+                  hover:bg-white/[0.035]
+                  hover:ring-emerald-400/40
+                "
+              >
+                <div className="h-[3px] w-full rounded-full bg-emerald-400/80" />
+
+                <div className="mt-3">
+                  <span className="rounded-full bg-emerald-400/10 text-emerald-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-emerald-400/25">
+                    NEW
+                  </span>
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
+                  <div className="relative h-20 w-full">
+                    <Image
+                      src="/partners/gemiwall.png"
+                      alt="GemiWall"
+                      fill
+                      className="object-contain p-3"
+                      priority
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 text-xs text-white/50">
+                  Complete offers and earn coins.
+                </div>
+              </div>
+
+              {/* Other providers */}
               {providers.map((p) => (
                 <div
                   key={p.slug}
                   className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-5"
                 >
-                  <div className="h-[3px] w-full rounded-full" style={{ background: p.color }} />
+                  <div
+                    className="h-[3px] w-full rounded-full"
+                    style={{ background: p.color }}
+                  />
 
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -148,13 +193,7 @@ export default function EarnPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* CPX */}
-              <div
-                className={[
-                  "group rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6",
-                  "transition hover:bg-white/[0.03] hover:ring-white/15",
-                ].join(" ")}
-              >
+              <div className="group rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="relative h-11 w-11 rounded-xl bg-white overflow-hidden ring-1 ring-white/15">
@@ -168,83 +207,22 @@ export default function EarnPage() {
                     </div>
                     <div>
                       <div className="font-extrabold tracking-tight">CPX RESEARCH</div>
-                      <div className="text-xs text-white/50">High quality surveys</div>
+                      <div className="text-xs text-white/50">
+                        High quality surveys
+                      </div>
                     </div>
                   </div>
 
-                  {/* ✅ HER ZAMAN GÖZÜKÜR */}
                   <button
                     type="button"
                     onClick={openCPX}
-                    className={[
-                      "rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black",
-                      "transition",
-                      "group-hover:scale-[1.03] group-hover:shadow-[0_12px_40px_rgba(16,185,129,0.35)]",
-                      "hover:opacity-95",
-                      "focus:outline-none focus-visible:outline-none active:scale-[0.99]",
-                      "cursor-pointer",
-                    ].join(" ")}
+                    className="rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black transition hover:opacity-95"
                   >
                     Open
                   </button>
                 </div>
-
-                <div className="mt-4 flex items-center gap-2">
-                  <span className="rounded-full bg-emerald-400/15 text-emerald-200 px-3 py-1 text-xs ring-1 ring-emerald-400/30">
-                    Recommended
-                  </span>
-                  <span className="text-xs text-white/45">
-                    Earn coins instantly after completion.
-                  </span>
-                </div>
               </div>
 
-              {/* ✅ NEW: GEMIWALL */}
-              <div
-                className={[
-                  "group rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6",
-                  "transition hover:bg-white/[0.03] hover:ring-white/15",
-                ].join(" ")}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-extrabold">
-                      G
-                    </div>
-                    <div>
-                      <div className="font-extrabold tracking-tight">GEMIWALL</div>
-                      <div className="text-xs text-white/50">Offers & rewards</div>
-                    </div>
-                  </div>
-
-                  {/* ✅ HER ZAMAN GÖZÜKÜR */}
-                  <button
-                    type="button"
-                    onClick={openGemiWall}
-                    className={[
-                      "rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black",
-                      "transition",
-                      "group-hover:scale-[1.03] group-hover:shadow-[0_12px_40px_rgba(16,185,129,0.35)]",
-                      "hover:opacity-95",
-                      "focus:outline-none focus-visible:outline-none active:scale-[0.99]",
-                      "cursor-pointer",
-                    ].join(" ")}
-                  >
-                    Open
-                  </button>
-                </div>
-
-                <div className="mt-4 flex items-center gap-2">
-                  <span className="rounded-full bg-white/[0.04] text-white/75 px-3 py-1 text-xs ring-1 ring-white/10">
-                    Offerwall
-                  </span>
-                  <span className="text-xs text-white/45">
-                    Complete offers to earn coins.
-                  </span>
-                </div>
-              </div>
-
-              {/* MORE */}
               <div className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -268,6 +246,7 @@ export default function EarnPage() {
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>
