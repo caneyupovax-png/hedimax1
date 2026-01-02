@@ -10,10 +10,11 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const subId = searchParams.get("subId") || "";      // user uuid
-    const transId = searchParams.get("transId") || "";  // unique tx
-    const rewardStr = searchParams.get("reward") || ""; // virtual currency (absolute)
-    const statusStr = searchParams.get("status") || ""; // 1 add, 2 subtract
+    const subId = searchParams.get("subId") || "";
+    const transId = searchParams.get("transId") || "";
+    const rewardStr = searchParams.get("reward") || "";
+    const roundRewardStr = searchParams.get("round_reward") || "";
+    const statusStr = searchParams.get("status") || "";
     const signature = (searchParams.get("signature") || "").toLowerCase();
 
     if (!subId || !transId || !rewardStr || !statusStr || !signature) {
@@ -30,16 +31,29 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Invalid status", { status: 400 });
     }
 
-    const secret = process.env.ADSWED_SECRET || "";
+    const secret = (process.env.ADSWED_SECRET || "").trim();
     if (!secret) {
-      // Secret yoksa güvenlik doğrulaması yapamayız
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
-    // ✅ AdsWedMedia signature rule:
-    // MD5(SUBID + TRANSACTIONID + REWARD + SECRET)
-    const expected = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
-    if (expected !== signature) {
+    // AdsWed rule: MD5(subId + transId + reward + secret)
+    // Bazı durumlarda signature round_reward ile üretilmiş olabiliyor, fallback ekledik.
+    const expected1 = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
+    const expected2 = roundRewardStr
+      ? md5(`${subId}${transId}${roundRewardStr}${secret}`).toLowerCase()
+      : "";
+
+    if (signature !== expected1 && (!expected2 || signature !== expected2)) {
+      // Debug için Vercel logs'a düşer
+      console.log("adswed sig mismatch", {
+        subId,
+        transId,
+        rewardStr,
+        roundRewardStr,
+        got: signature,
+        expected1,
+        expected2,
+      });
       return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
     }
 
@@ -53,15 +67,15 @@ export async function GET(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // status=1 add, status=2 subtract (reward absolute geliyor)
+    // status=1 add, status=2 subtract (reward absolute)
     const delta = status === 1 ? Math.round(reward) : -Math.round(reward);
 
-    // Idempotency: transId unique => duplicate olursa "DUP" dönmeliyiz
+    // idempotency store
     const raw = Object.fromEntries(searchParams.entries());
 
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
-      user_id: subId, // uuid bekleniyor
+      user_id: subId, // profiles.id uuid
       delta,
       reward,
       payout: searchParams.get("payout") ? Number(searchParams.get("payout")) : null,
@@ -69,27 +83,29 @@ export async function GET(req: Request) {
       raw,
     });
 
-    // Duplicate transaction => AdsWed "DUP" bekliyor
+    // Duplicate => "DUP" (AdsWed expects this)
     if (insErr && String(insErr.message || "").toLowerCase().includes("duplicate")) {
       return new NextResponse("DUP", { status: 200 });
     }
     if (insErr) {
+      console.log("adswed db insert failed", insErr);
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // points_balance update (senin profiles.user_id uuid)
+    // Update points (profiles.points, where id=subId)
     const { error: rpcErr } = await admin.rpc("increment_points", {
       p_user_id: subId,
       p_delta: delta,
     });
 
     if (rpcErr) {
+      console.log("adswed rpc failed", rpcErr);
       return new NextResponse("ERROR: Points update failed", { status: 500 });
     }
 
-    // ✅ New transaction => "OK"
     return new NextResponse("OK", { status: 200 });
   } catch (e: any) {
+    console.log("adswed server error", e);
     return new NextResponse("ERROR: Server error", { status: 500 });
   }
 }
