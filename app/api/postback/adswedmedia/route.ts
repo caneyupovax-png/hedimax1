@@ -9,10 +9,10 @@ function md5(input: string) {
 type AnySB = ReturnType<typeof createClient>;
 
 async function getAndUpdatePointsBalance(admin: AnySB, userId: string, delta: number) {
-  // Supabase typed client bazı projelerde table types üretmediği için
-  // from("points_balance") -> never hatası veriyor.
-  // Bu yüzden burada bilinçli olarak any kullanıyoruz.
-  const pb = admin.from<any>("points_balance");
+  // IMPORTANT:
+  // Some supabase-js type setups require 2 generics for from<T, R>.
+  // To avoid TypeScript build errors, we cast the table name and builder to any.
+  const pb = (admin.from("points_balance" as any) as any);
 
   // 1) Try schema A: points_balance(user_id uuid, balance bigint)
   {
@@ -33,8 +33,8 @@ async function getAndUpdatePointsBalance(admin: AnySB, userId: string, delta: nu
       }
     }
 
-    // If error mentions missing column user_id, fall back to schema B
     const msg = String(sel.error?.message || "").toLowerCase();
+    // If missing column user_id => fallback to schema B
     if (!(msg.includes("column") && msg.includes("user_id"))) {
       throw sel.error;
     }
@@ -64,7 +64,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const subId = (searchParams.get("subId") || "").trim(); // user uuid
+    const subId = (searchParams.get("subId") || "").trim();
     const transId = (searchParams.get("transId") || "").trim();
     const rewardStr = (searchParams.get("reward") || "").trim();
     const roundRewardStr = (searchParams.get("round_reward") || "").trim();
@@ -86,8 +86,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
-    // ✅ AdsWed signature rule (exact):
-    // signature == MD5(subId + transId + reward + secret)
+    // ✅ AdsWed signature: MD5(subId + transId + reward + secret)
     const expectedSig = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
     if (expectedSig !== signature) {
       return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
@@ -103,7 +102,7 @@ export async function GET(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // --- CREDIT CALCULATION ---
+    // CREDIT CALCULATION: round_reward > reward > payout*rate
     const r = Number(rewardStr);
     const rr = roundRewardStr ? Number(roundRewardStr) : NaN;
     const p = payoutStr ? Number(payoutStr) : NaN;
@@ -150,17 +149,9 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // 2) ✅ PRIMARY: update points_balance table (Navbar reads this)
+    // 2) ✅ update points_balance table (Navbar reads this)
     try {
-      const res = await getAndUpdatePointsBalance(admin, subId, delta);
-      console.log("ADSWED_POINTS_BALANCE_UPDATED", {
-        subId,
-        transId,
-        delta,
-        schema: res.schema,
-        before: res.before,
-        after: res.after,
-      });
+      await getAndUpdatePointsBalance(admin, subId, delta);
     } catch (e: any) {
       console.log("ADSWED_POINTS_BALANCE_FAILED", e);
       return new NextResponse("ERROR: points_balance update failed", { status: 500 });
