@@ -12,9 +12,10 @@ export async function GET(req: Request) {
 
     const subId = searchParams.get("subId") || "";
     const transId = searchParams.get("transId") || "";
-    const rewardStr = searchParams.get("reward") || "";
-    const roundRewardStr = searchParams.get("round_reward") || "";
-    const statusStr = searchParams.get("status") || "";
+    const rewardStr = (searchParams.get("reward") || "").trim();
+    const roundRewardStr = (searchParams.get("round_reward") || "").trim();
+    const payoutStr = (searchParams.get("payout") || "").trim();
+    const statusStr = (searchParams.get("status") || "").trim();
     const signature = (searchParams.get("signature") || "").toLowerCase();
 
     if (!subId || !transId || !rewardStr || !statusStr || !signature) {
@@ -31,7 +32,8 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
-    // Signature: MD5(subId + transId + reward + secret)
+    // ✅ AdsWed signature rule (exact):
+    // MD5(subId + transId + reward + secret)
     const expected = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
     if (expected !== signature) {
       return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
@@ -47,25 +49,51 @@ export async function GET(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // ✅ CREDIT AMOUNT:
-    // round_reward varsa onu tercih et (genelde coin formatı)
-    // yoksa reward kullan.
-    const rawValueStr = (roundRewardStr || rewardStr).trim();
-    const rawValueNum = Number(rawValueStr);
+    // --- CREDIT CALCULATION ---
+    // Prefer round_reward > reward
+    const rr = roundRewardStr ? Number(roundRewardStr) : NaN;
+    const r = Number(rewardStr);
+    const p = payoutStr ? Number(payoutStr) : NaN;
 
-    if (!Number.isFinite(rawValueNum) || rawValueNum < 0) {
+    if (!Number.isFinite(r) || r < 0) {
       return new NextResponse("ERROR: Invalid reward", { status: 400 });
     }
+    if (roundRewardStr && (!Number.isFinite(rr) || rr < 0)) {
+      return new NextResponse("ERROR: Invalid round_reward", { status: 400 });
+    }
+    if (payoutStr && (!Number.isFinite(p) || p < 0)) {
+      return new NextResponse("ERROR: Invalid payout", { status: 400 });
+    }
 
-    // points INT8 => integer olmalı
-    // Normalde AdsWed reward zaten coin olarak integer olmalı.
-    // Ama küçük/ondalıklı gelirse 0'a düşmesin diye minimum 1 kredi veriyoruz.
-    let credit = Math.round(rawValueNum);
-    if (credit === 0 && rawValueNum > 0) credit = 1;
+    // 1) Use round_reward if > 0
+    // 2) else use reward if > 0
+    // 3) else compute from payout * rate
+    const rate = Number((process.env.ADSWED_USD_TO_POINTS || "1000").trim()); // default 1000
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return new NextResponse("ERROR: Invalid ADSWED_USD_TO_POINTS", { status: 500 });
+    }
+
+    let creditBase = 0;
+
+    if (Number.isFinite(rr) && rr > 0) {
+      creditBase = rr;
+    } else if (r > 0) {
+      creditBase = r;
+    } else if (Number.isFinite(p) && p > 0) {
+      creditBase = p * rate;
+    } else {
+      // reward=0 and payout missing/0 => nothing to credit
+      console.log("ADSWED_ZERO_REWARD", { subId, transId, rewardStr, roundRewardStr, payoutStr });
+      return new NextResponse("ERROR: Zero reward", { status: 400 });
+    }
+
+    // points is integer => round to int, but never 0 if creditBase > 0
+    let credit = Math.round(creditBase);
+    if (credit === 0 && creditBase > 0) credit = 1;
 
     const delta = status === 1 ? credit : -credit;
 
-    // 1) Kullanıcı var mı? (debug)
+    // Ensure user exists
     const { data: profileRow, error: profErr } = await admin
       .from("profiles")
       .select("id, points")
@@ -81,15 +109,15 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: User not found", { status: 400 });
     }
 
+    // Idempotency store
     const raw = Object.fromEntries(searchParams.entries());
 
-    // 2) Idempotency (duplicate => DUP)
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
       user_id: subId,
       delta,
-      reward: Number(rewardStr),
-      payout: searchParams.get("payout") ? Number(searchParams.get("payout")) : null,
+      reward: r,
+      payout: payoutStr ? Number(payoutStr) : null,
       status,
       raw,
     });
@@ -102,7 +130,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // 3) Points update (increment_points returns updated row count integer)
+    // Update points (increment_points returns updated row count integer)
     const { data: updatedCount, error: rpcErr } = await admin.rpc("increment_points", {
       p_user_id: subId,
       p_delta: delta,
@@ -112,17 +140,8 @@ export async function GET(req: Request) {
       console.log("ADSWED_RPC_FAILED", rpcErr);
       return new NextResponse("ERROR: Points update failed", { status: 500 });
     }
-
     if (!updatedCount || Number(updatedCount) < 1) {
-      console.log("ADSWED_POINTS_NOT_UPDATED", {
-        subId,
-        transId,
-        delta,
-        rawValueStr,
-        rawValueNum,
-        credit,
-        updatedCount,
-      });
+      console.log("ADSWED_POINTS_NOT_UPDATED", { subId, transId, delta, updatedCount });
       return new NextResponse("ERROR: Points not updated", { status: 500 });
     }
 
@@ -132,8 +151,9 @@ export async function GET(req: Request) {
       status,
       rewardStr,
       roundRewardStr,
-      usedValue: rawValueStr,
-      usedValueNum: rawValueNum,
+      payoutStr,
+      rate,
+      creditBase,
       credit,
       delta,
       before: profileRow.points,
