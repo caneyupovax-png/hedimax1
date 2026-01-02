@@ -6,66 +6,79 @@ function md5(input: string) {
   return crypto.createHash("md5").update(input).digest("hex");
 }
 
-async function syncPointsBalanceTable(
+async function getAndUpdatePointsBalance(
   admin: ReturnType<typeof createClient>,
   userId: string,
-  newBalance: number
+  delta: number
 ) {
-  // 1) Try schema A: points_balance(id uuid, balance bigint)
+  // We support two possible schemas for points_balance:
+  // A) points_balance(user_id uuid, balance bigint)
+  // B) points_balance(id uuid, balance bigint)
+
+  // --- Try schema A: user_id ---
   {
-    const u = await admin
+    const sel = await admin
       .from("points_balance")
-      .update({ balance: newBalance })
-      .eq("id", userId);
+      .select("balance")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    // If update worked (no error and at least one row matched), done
-    if (!u.error) {
-      // supabase-js doesn't always return rowcount; so we verify by selecting
-      const v = await admin
-        .from("points_balance")
-        .select("balance")
-        .eq("id", userId)
-        .maybeSingle();
+    if (!sel.error) {
+      const current = Number((sel.data as any)?.balance ?? 0);
+      const next = current + delta;
 
-      if (!v.error && v.data && typeof (v.data as any).balance !== "undefined") return;
+      if (sel.data) {
+        const upd = await admin
+          .from("points_balance")
+          .update({ balance: next })
+          .eq("user_id", userId);
+
+        if (upd.error) throw upd.error;
+        return { schema: "user_id", before: current, after: next };
+      } else {
+        const ins = await admin
+          .from("points_balance")
+          .insert({ user_id: userId, balance: next });
+
+        if (ins.error) throw ins.error;
+        return { schema: "user_id", before: 0, after: next };
+      }
     }
 
-    // If column doesn't exist, we'll fall through to schema B
-    if (u.error && String(u.error.message || "").toLowerCase().includes("column") &&
-        String(u.error.message || "").toLowerCase().includes("id")) {
-      // fallthrough
-    } else {
-      // If row didn't exist, try insert
-      const ins = await admin.from("points_balance").insert({ id: userId, balance: newBalance });
-      if (!ins.error) return;
-
-      // If insert failed because column id doesn't exist, fallthrough
-      if (!(ins.error && String(ins.error.message || "").toLowerCase().includes("column") &&
-            String(ins.error.message || "").toLowerCase().includes("id"))) {
-        // other errors: keep going to schema B as fallback anyway
-      }
+    // If error mentions missing column user_id, fall back to schema B
+    const msg = String(sel.error?.message || "").toLowerCase();
+    if (!(msg.includes("column") && msg.includes("user_id"))) {
+      // Some other error (permissions, etc.)
+      throw sel.error;
     }
   }
 
-  // 2) Try schema B: points_balance(user_id uuid, balance bigint)
+  // --- Try schema B: id ---
   {
-    const u = await admin
+    const sel = await admin
       .from("points_balance")
-      .update({ balance: newBalance })
-      .eq("user_id", userId);
+      .select("balance")
+      .eq("id", userId)
+      .maybeSingle();
 
-    if (!u.error) {
-      const v = await admin
+    if (sel.error) throw sel.error;
+
+    const current = Number((sel.data as any)?.balance ?? 0);
+    const next = current + delta;
+
+    if (sel.data) {
+      const upd = await admin
         .from("points_balance")
-        .select("balance")
-        .eq("user_id", userId)
-        .maybeSingle();
+        .update({ balance: next })
+        .eq("id", userId);
 
-      if (!v.error && v.data && typeof (v.data as any).balance !== "undefined") return;
+      if (upd.error) throw upd.error;
+      return { schema: "id", before: current, after: next };
+    } else {
+      const ins = await admin.from("points_balance").insert({ id: userId, balance: next });
+      if (ins.error) throw ins.error;
+      return { schema: "id", before: 0, after: next };
     }
-
-    // try insert
-    await admin.from("points_balance").insert({ user_id: userId, balance: newBalance });
   }
 }
 
@@ -73,9 +86,11 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const subId = (searchParams.get("subId") || "").trim();
+    const subId = (searchParams.get("subId") || "").trim(); // user uuid
     const transId = (searchParams.get("transId") || "").trim();
     const rewardStr = (searchParams.get("reward") || "").trim();
+    const roundRewardStr = (searchParams.get("round_reward") || "").trim();
+    const payoutStr = (searchParams.get("payout") || "").trim();
     const statusStr = (searchParams.get("status") || "").trim();
     const signature = (searchParams.get("signature") || "").toLowerCase();
 
@@ -93,9 +108,10 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
-    // AdsWed signature rule: MD5(subId + transId + reward + secret)
-    const expected = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
-    if (expected !== signature) {
+    // ✅ AdsWed signature rule (exact):
+    // MD5(subId + transId + reward + secret)
+    const expectedSig = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
+    if (expectedSig !== signature) {
       return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
     }
 
@@ -109,11 +125,8 @@ export async function GET(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // reward sometimes can be 0; if it is 0, no credit would happen.
-    // We'll compute credit using: round_reward > reward > payout*rate (if provided)
-    const roundRewardStr = (searchParams.get("round_reward") || "").trim();
-    const payoutStr = (searchParams.get("payout") || "").trim();
-
+    // --- CREDIT CALCULATION ---
+    // Prefer round_reward > reward > payout*rate
     const r = Number(rewardStr);
     const rr = roundRewardStr ? Number(roundRewardStr) : NaN;
     const p = payoutStr ? Number(payoutStr) : NaN;
@@ -141,7 +154,7 @@ export async function GET(req: Request) {
     const delta = status === 1 ? credit : -credit;
     const raw = Object.fromEntries(searchParams.entries());
 
-    // 1) idempotency insert
+    // 1) idempotency
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
       user_id: subId,
@@ -160,43 +173,20 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // 2) Update profiles via RPC (returns updated row count)
-    const { data: updatedCount, error: rpcErr } = await admin.rpc("increment_points", {
-      p_user_id: subId,
-      p_delta: delta,
-    });
-
-    if (rpcErr) {
-      console.log("ADSWED_RPC_FAILED", rpcErr);
-      return new NextResponse("ERROR: Points update failed", { status: 500 });
-    }
-
-    if (!updatedCount || Number(updatedCount) < 1) {
-      console.log("ADSWED_USER_NOT_FOUND", { subId, transId });
-      return new NextResponse("ERROR: User not found", { status: 400 });
-    }
-
-    // 3) Read the NEW balance from profiles.points_balance and mirror into points_balance table
-    const { data: prof, error: profErr } = await admin
-      .from("profiles")
-      .select("points_balance")
-      .eq("id", subId)
-      .maybeSingle();
-
-    if (profErr || !prof) {
-      console.log("ADSWED_PROFILE_READ_FAILED", profErr);
-      return new NextResponse("ERROR: Profile read failed", { status: 500 });
-    }
-
-    const newBal = Number((prof as any).points_balance ?? 0);
-
-    // mirror into points_balance (whatever schema exists)
+    // 2) ✅ PRIMARY: write into points_balance table (this is what your Navbar reads)
     try {
-      await syncPointsBalanceTable(admin, subId, newBal);
+      const res = await getAndUpdatePointsBalance(admin, subId, delta);
+      console.log("ADSWED_POINTS_BALANCE_UPDATED", {
+        subId,
+        transId,
+        delta,
+        schema: res.schema,
+        before: res.before,
+        after: res.after,
+      });
     } catch (e: any) {
-      console.log("ADSWED_SYNC_POINTS_BALANCE_FAILED", e);
-      // Not fatal to crediting, but if you want strictness, uncomment next line:
-      // return new NextResponse("ERROR: Balance sync failed", { status: 500 });
+      console.log("ADSWED_POINTS_BALANCE_FAILED", e);
+      return new NextResponse("ERROR: points_balance update failed", { status: 500 });
     }
 
     return new NextResponse("OK", { status: 200 });
