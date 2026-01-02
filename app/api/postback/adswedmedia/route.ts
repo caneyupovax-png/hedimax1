@@ -6,119 +6,90 @@ function md5(input: string) {
   return crypto.createHash("md5").update(input).digest("hex");
 }
 
-/**
- * IMPORTANT:
- * AdsWedMedia signature MD5 formatı onların panel/dokümanında yazar.
- * Ben burada en yaygın 3 varyasyonu destekleyecek şekilde kontrol ediyorum.
- * Doğru olanı bulunca diğerlerini silebilirsin.
- */
-function verifySignature(params: URLSearchParams) {
-  const secret = process.env.ADSWED_SECRET || "";
-  if (!secret) return { ok: true, reason: "ADSWED_SECRET not set (skipped)" };
-
-  const subId = params.get("subId") || "";
-  const transId = params.get("transId") || "";
-  const reward = params.get("reward") || "";
-  const payout = params.get("payout") || "";
-  const signature = (params.get("signature") || "").toLowerCase();
-
-  // Varyasyonlar (dokümana göre bir tanesi doğru çıkacak)
-  const c1 = md5(`${transId}${secret}`);
-  const c2 = md5(`${subId}${transId}${reward}${secret}`);
-  const c3 = md5(`${subId}${transId}${reward}${payout}${secret}`);
-
-  const ok = signature === c1 || signature === c2 || signature === c3;
-  return { ok, reason: ok ? "match" : `no match (got=${signature}, c1=${c1}, c2=${c2}, c3=${c3})` };
-}
-
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const subId = searchParams.get("subId");      // kullanıcı id (senin gönderdiğin)
-    const transId = searchParams.get("transId");  // transaction unique
-    const rewardRaw = searchParams.get("reward"); // coin/virtual currency absolute
-    const payoutRaw = searchParams.get("payout"); // $ absolute
-    const statusRaw = searchParams.get("status"); // "1" add, "2" subtract
+    const subId = searchParams.get("subId") || "";      // user uuid
+    const transId = searchParams.get("transId") || "";  // unique tx
+    const rewardStr = searchParams.get("reward") || ""; // virtual currency (absolute)
+    const statusStr = searchParams.get("status") || ""; // 1 add, 2 subtract
+    const signature = (searchParams.get("signature") || "").toLowerCase();
 
-    if (!subId || !transId || !rewardRaw || !statusRaw) {
-      return NextResponse.json({ error: "missing params" }, { status: 400 });
+    if (!subId || !transId || !rewardStr || !statusStr || !signature) {
+      return new NextResponse("ERROR: Missing params", { status: 400 });
     }
 
-    const reward = Number(rewardRaw);
-    const payout = payoutRaw ? Number(payoutRaw) : null;
-    const status = Number(statusRaw);
+    const reward = Number(rewardStr);
+    const status = Number(statusStr);
 
     if (!Number.isFinite(reward) || reward < 0) {
-      return NextResponse.json({ error: "invalid reward" }, { status: 400 });
+      return new NextResponse("ERROR: Invalid reward", { status: 400 });
     }
     if (status !== 1 && status !== 2) {
-      return NextResponse.json({ error: "invalid status" }, { status: 400 });
+      return new NextResponse("ERROR: Invalid status", { status: 400 });
     }
 
-    // signature doğrulama
-    const sig = verifySignature(searchParams);
-    if (!sig.ok) {
-      // Provider bazen "200 OK" ister; ama güvenlik için 403 döndürüyoruz.
-      // Eğer AdsWed 200 zorunlu diyorsa: 200 + "INVALID" döndürebiliriz.
-      return NextResponse.json({ error: "bad signature", detail: sig.reason }, { status: 403 });
+    const secret = process.env.ADSWED_SECRET || "";
+    if (!secret) {
+      // Secret yoksa güvenlik doğrulaması yapamayız
+      return new NextResponse("ERROR: Missing secret", { status: 500 });
+    }
+
+    // ✅ AdsWedMedia signature rule:
+    // MD5(SUBID + TRANSACTIONID + REWARD + SECRET)
+    const expected = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
+    if (expected !== signature) {
+      return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json({ error: "missing supabase env" }, { status: 500 });
+      return new NextResponse("ERROR: Missing supabase env", { status: 500 });
     }
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // delta: status=1 ekle, status=2 çıkar
+    // status=1 add, status=2 subtract (reward absolute geliyor)
     const delta = status === 1 ? Math.round(reward) : -Math.round(reward);
 
-    // 1) Idempotent kayıt: transId unique olacak şekilde bir tabloya yaz.
-    // Eğer sende böyle bir tablo yoksa aşağıdaki SQL'i Supabase'de oluştur.
-    // table: adswed_postbacks (trans_id unique)
+    // Idempotency: transId unique => duplicate olursa "DUP" dönmeliyiz
     const raw = Object.fromEntries(searchParams.entries());
 
-    const { error: insErr } = await admin
-      .from("adswed_postbacks")
-      .insert({
-        trans_id: transId,
-        user_id: subId,
-        delta,
-        reward,
-        payout,
-        status,
-        raw,
-      });
-
-    // Duplicate trans_id gelirse (zaten işlendi) → OK dön
-    if (insErr && !String(insErr.message || "").toLowerCase().includes("duplicate")) {
-      return NextResponse.json({ error: "db insert failed", detail: insErr.message }, { status: 500 });
-    }
-    if (insErr && String(insErr.message || "").toLowerCase().includes("duplicate")) {
-      return new NextResponse("OK", { status: 200 });
-    }
-
-    // 2) Kullanıcının puanını güncelle (kendi şemana göre ayarla)
-    // A) Eğer profiles tablon varsa:
-    const { error: upErr } = await admin.rpc("increment_points", {
-      p_user_id: subId,
-      p_delta: delta,
-      p_provider: "adswedmedia",
-      p_ref: transId,
+    const { error: insErr } = await admin.from("adswed_postbacks").insert({
+      trans_id: transId,
+      user_id: subId, // uuid bekleniyor
+      delta,
+      reward,
+      payout: searchParams.get("payout") ? Number(searchParams.get("payout")) : null,
+      status,
+      raw,
     });
 
-    // Eğer increment_points RPC yoksa, aşağıdaki gibi direkt update yapman gerekir
-    // (ama yarış durumları olabilir; RPC daha doğru).
-    if (upErr) {
-      return NextResponse.json({ error: "points update failed", detail: upErr.message }, { status: 500 });
+    // Duplicate transaction => AdsWed "DUP" bekliyor
+    if (insErr && String(insErr.message || "").toLowerCase().includes("duplicate")) {
+      return new NextResponse("DUP", { status: 200 });
+    }
+    if (insErr) {
+      return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
+    // points_balance update (senin profiles.user_id uuid)
+    const { error: rpcErr } = await admin.rpc("increment_points", {
+      p_user_id: subId,
+      p_delta: delta,
+    });
+
+    if (rpcErr) {
+      return new NextResponse("ERROR: Points update failed", { status: 500 });
+    }
+
+    // ✅ New transaction => "OK"
     return new NextResponse("OK", { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: "server error", detail: e?.message || String(e) }, { status: 500 });
+    return new NextResponse("ERROR: Server error", { status: 500 });
   }
 }
