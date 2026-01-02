@@ -10,6 +10,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
+    // Required
     const subId = searchParams.get("subId") || "";
     const transId = searchParams.get("transId") || "";
     const rewardStr = searchParams.get("reward") || "";
@@ -17,10 +18,14 @@ export async function GET(req: Request) {
     const statusStr = searchParams.get("status") || "";
     const signature = (searchParams.get("signature") || "").toLowerCase();
 
+    // Optional (we store in raw)
+    const payoutStr = searchParams.get("payout") || "";
+
     if (!subId || !transId || !rewardStr || !statusStr || !signature) {
       return new NextResponse("ERROR: Missing params", { status: 400 });
     }
 
+    // Validate numeric basics (reward absolute)
     const reward = Number(rewardStr);
     const status = Number(statusStr);
 
@@ -31,25 +36,28 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Invalid status", { status: 400 });
     }
 
+    // Signature verification (AdsWedMedia official):
+    // signature == MD5(subId + transId + reward + secret)
+    // NOTE: some tester setups may send signature based on round_reward formatting;
+    // we accept both reward and round_reward to avoid format mismatches.
     const secret = (process.env.ADSWED_SECRET || "").trim();
     if (!secret) {
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
-    // AdsWed rule: MD5(subId + transId + reward + secret)
-    // Bazı durumlarda signature round_reward ile üretilmiş olabiliyor, fallback ekledik.
     const expected1 = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
     const expected2 = roundRewardStr
       ? md5(`${subId}${transId}${roundRewardStr}${secret}`).toLowerCase()
       : "";
 
     if (signature !== expected1 && (!expected2 || signature !== expected2)) {
-      // Debug için Vercel logs'a düşer
-      console.log("adswed sig mismatch", {
+      // Log for debugging in Vercel Functions logs
+      console.log("ADSWED_SIG_MISMATCH", {
         subId,
         transId,
         rewardStr,
         roundRewardStr,
+        payoutStr,
         got: signature,
         expected1,
         expected2,
@@ -57,6 +65,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
     }
 
+    // Supabase admin client
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     if (!supabaseUrl || !serviceKey) {
@@ -67,45 +76,47 @@ export async function GET(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // status=1 add, status=2 subtract (reward absolute)
+    // status: 1 add, 2 subtract (reward absolute)
     const delta = status === 1 ? Math.round(reward) : -Math.round(reward);
 
-    // idempotency store
+    // Idempotency: store tx (trans_id unique)
     const raw = Object.fromEntries(searchParams.entries());
+    const payout = payoutStr ? Number(payoutStr) : null;
 
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
-      user_id: subId, // profiles.id uuid
+      user_id: subId, // profiles.id (uuid)
       delta,
       reward,
-      payout: searchParams.get("payout") ? Number(searchParams.get("payout")) : null,
+      payout,
       status,
       raw,
     });
 
-    // Duplicate => "DUP" (AdsWed expects this)
+    // Duplicate transaction => AdsWed expects "DUP"
     if (insErr && String(insErr.message || "").toLowerCase().includes("duplicate")) {
       return new NextResponse("DUP", { status: 200 });
     }
     if (insErr) {
-      console.log("adswed db insert failed", insErr);
+      console.log("ADSWED_DB_INSERT_FAILED", insErr);
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // Update points (profiles.points, where id=subId)
+    // Update user points (profiles.points, where id=subId)
     const { error: rpcErr } = await admin.rpc("increment_points", {
       p_user_id: subId,
       p_delta: delta,
     });
 
     if (rpcErr) {
-      console.log("adswed rpc failed", rpcErr);
+      console.log("ADSWED_RPC_FAILED", rpcErr);
       return new NextResponse("ERROR: Points update failed", { status: 500 });
     }
 
+    // New transaction => AdsWed expects "OK"
     return new NextResponse("OK", { status: 200 });
   } catch (e: any) {
-    console.log("adswed server error", e);
+    console.log("ADSWED_SERVER_ERROR", e);
     return new NextResponse("ERROR: Server error", { status: 500 });
   }
 }
