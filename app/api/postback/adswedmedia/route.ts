@@ -36,6 +36,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
+    // signature == MD5(subId + transId + reward + secret)
     const expected1 = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
     const expected2 = roundRewardStr
       ? md5(`${subId}${transId}${roundRewardStr}${secret}`).toLowerCase()
@@ -64,10 +65,27 @@ export async function GET(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // 1) Önce kullanıcı gerçekten var mı kontrol et (yoksa puan yazamaz)
+    const { data: profileRow, error: profErr } = await admin
+      .from("profiles")
+      .select("id, points")
+      .eq("id", subId)
+      .maybeSingle();
+
+    if (profErr) {
+      console.log("ADSWED_PROFILE_LOOKUP_FAILED", profErr);
+      return new NextResponse("ERROR: Profile lookup failed", { status: 500 });
+    }
+
+    if (!profileRow) {
+      console.log("ADSWED_USER_NOT_FOUND", { subId, transId });
+      return new NextResponse("ERROR: User not found", { status: 400 });
+    }
+
     const delta = status === 1 ? Math.round(reward) : -Math.round(reward);
     const raw = Object.fromEntries(searchParams.entries());
 
-    // 1) idempotency
+    // 2) Idempotency insert (duplicate => DUP)
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
       user_id: subId,
@@ -86,7 +104,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // 2) points update (RPC returns updated row count integer)
+    // 3) RPC ile puan güncelle (updated_count döndürmeli)
     const { data: updatedCount, error: rpcErr } = await admin.rpc("increment_points", {
       p_user_id: subId,
       p_delta: delta,
@@ -98,9 +116,29 @@ export async function GET(req: Request) {
     }
 
     if (!updatedCount || Number(updatedCount) < 1) {
-      console.log("ADSWED_USER_NOT_FOUND", { subId, transId });
-      return new NextResponse("ERROR: User not found", { status: 400 });
+      console.log("ADSWED_POINTS_NOT_UPDATED", { subId, transId, delta, updatedCount });
+      return new NextResponse("ERROR: Points not updated", { status: 500 });
     }
+
+    // 4) Son kontrol: points gerçekten artmış mı?
+    const { data: verifyRow, error: verErr } = await admin
+      .from("profiles")
+      .select("id, points")
+      .eq("id", subId)
+      .maybeSingle();
+
+    if (verErr) {
+      console.log("ADSWED_VERIFY_FAILED", verErr);
+      return new NextResponse("ERROR: Verify failed", { status: 500 });
+    }
+
+    console.log("ADSWED_OK", {
+      subId,
+      transId,
+      delta,
+      before: profileRow.points,
+      after: verifyRow?.points,
+    });
 
     return new NextResponse("OK", { status: 200 });
   } catch (e: any) {
