@@ -6,13 +6,12 @@ function md5(input: string) {
   return crypto.createHash("md5").update(input).digest("hex");
 }
 
-type AnySB = ReturnType<typeof createClient>;
-
-async function getAndUpdatePointsBalance(admin: AnySB, userId: string, delta: number) {
+async function getAndUpdatePointsBalance(admin: any, userId: string, delta: number) {
   // IMPORTANT:
-  // Some supabase-js type setups require 2 generics for from<T, R>.
-  // To avoid TypeScript build errors, we cast the table name and builder to any.
-  const pb = (admin.from("points_balance" as any) as any);
+  // This project has strict generated Supabase types that can become `never`
+  // for tables not present in the type map. To avoid build-time type errors,
+  // we use `any` for PostgREST operations here.
+  const pb: any = admin.from("points_balance");
 
   // 1) Try schema A: points_balance(user_id uuid, balance bigint)
   {
@@ -98,7 +97,8 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Missing supabase env", { status: 500 });
     }
 
-    const admin = createClient(supabaseUrl, serviceKey, {
+    // Cast to any to avoid strict SupabaseClient type mismatches at build time
+    const admin: any = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
@@ -131,7 +131,7 @@ export async function GET(req: Request) {
     const raw = Object.fromEntries(searchParams.entries());
 
     // 1) idempotency (duplicate => DUP)
-    const { error: insErr } = await admin.from("adswed_postbacks").insert({
+    const ins = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
       user_id: subId,
       delta,
@@ -141,6 +141,7 @@ export async function GET(req: Request) {
       raw,
     });
 
+    const insErr = ins?.error;
     if (insErr && String(insErr.message || "").toLowerCase().includes("duplicate")) {
       return new NextResponse("DUP", { status: 200 });
     }
