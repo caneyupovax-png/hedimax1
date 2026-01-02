@@ -6,40 +6,28 @@ function md5(input: string) {
   return crypto.createHash("md5").update(input).digest("hex");
 }
 
-async function getAndUpdatePointsBalance(
-  admin: ReturnType<typeof createClient>,
-  userId: string,
-  delta: number
-) {
-  // We support two possible schemas for points_balance:
-  // A) points_balance(user_id uuid, balance bigint)
-  // B) points_balance(id uuid, balance bigint)
+type AnySB = ReturnType<typeof createClient>;
 
-  // --- Try schema A: user_id ---
+async function getAndUpdatePointsBalance(admin: AnySB, userId: string, delta: number) {
+  // Supabase typed client bazı projelerde table types üretmediği için
+  // from("points_balance") -> never hatası veriyor.
+  // Bu yüzden burada bilinçli olarak any kullanıyoruz.
+  const pb = admin.from<any>("points_balance");
+
+  // 1) Try schema A: points_balance(user_id uuid, balance bigint)
   {
-    const sel = await admin
-      .from("points_balance")
-      .select("balance")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const sel = await pb.select("balance").eq("user_id", userId).maybeSingle();
 
     if (!sel.error) {
-      const current = Number((sel.data as any)?.balance ?? 0);
+      const current = Number(sel.data?.balance ?? 0);
       const next = current + delta;
 
       if (sel.data) {
-        const upd = await admin
-          .from("points_balance")
-          .update({ balance: next })
-          .eq("user_id", userId);
-
+        const upd = await pb.update({ balance: next }).eq("user_id", userId);
         if (upd.error) throw upd.error;
         return { schema: "user_id", before: current, after: next };
       } else {
-        const ins = await admin
-          .from("points_balance")
-          .insert({ user_id: userId, balance: next });
-
+        const ins = await pb.insert({ user_id: userId, balance: next });
         if (ins.error) throw ins.error;
         return { schema: "user_id", before: 0, after: next };
       }
@@ -48,34 +36,24 @@ async function getAndUpdatePointsBalance(
     // If error mentions missing column user_id, fall back to schema B
     const msg = String(sel.error?.message || "").toLowerCase();
     if (!(msg.includes("column") && msg.includes("user_id"))) {
-      // Some other error (permissions, etc.)
       throw sel.error;
     }
   }
 
-  // --- Try schema B: id ---
+  // 2) Try schema B: points_balance(id uuid, balance bigint)
   {
-    const sel = await admin
-      .from("points_balance")
-      .select("balance")
-      .eq("id", userId)
-      .maybeSingle();
-
+    const sel = await pb.select("balance").eq("id", userId).maybeSingle();
     if (sel.error) throw sel.error;
 
-    const current = Number((sel.data as any)?.balance ?? 0);
+    const current = Number(sel.data?.balance ?? 0);
     const next = current + delta;
 
     if (sel.data) {
-      const upd = await admin
-        .from("points_balance")
-        .update({ balance: next })
-        .eq("id", userId);
-
+      const upd = await pb.update({ balance: next }).eq("id", userId);
       if (upd.error) throw upd.error;
       return { schema: "id", before: current, after: next };
     } else {
-      const ins = await admin.from("points_balance").insert({ id: userId, balance: next });
+      const ins = await pb.insert({ id: userId, balance: next });
       if (ins.error) throw ins.error;
       return { schema: "id", before: 0, after: next };
     }
@@ -109,7 +87,7 @@ export async function GET(req: Request) {
     }
 
     // ✅ AdsWed signature rule (exact):
-    // MD5(subId + transId + reward + secret)
+    // signature == MD5(subId + transId + reward + secret)
     const expectedSig = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
     if (expectedSig !== signature) {
       return new NextResponse("ERROR: Signature doesn't match", { status: 403 });
@@ -126,7 +104,6 @@ export async function GET(req: Request) {
     });
 
     // --- CREDIT CALCULATION ---
-    // Prefer round_reward > reward > payout*rate
     const r = Number(rewardStr);
     const rr = roundRewardStr ? Number(roundRewardStr) : NaN;
     const p = payoutStr ? Number(payoutStr) : NaN;
@@ -154,7 +131,7 @@ export async function GET(req: Request) {
     const delta = status === 1 ? credit : -credit;
     const raw = Object.fromEntries(searchParams.entries());
 
-    // 1) idempotency
+    // 1) idempotency (duplicate => DUP)
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
       user_id: subId,
@@ -173,7 +150,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // 2) ✅ PRIMARY: write into points_balance table (this is what your Navbar reads)
+    // 2) ✅ PRIMARY: update points_balance table (Navbar reads this)
     try {
       const res = await getAndUpdatePointsBalance(admin, subId, delta);
       console.log("ADSWED_POINTS_BALANCE_UPDATED", {
