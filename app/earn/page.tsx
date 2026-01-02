@@ -69,6 +69,22 @@ export default function EarnPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  const openAdsWed = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push("/login?next=/earn");
+      return;
+    }
+
+    // ✅ YOUR AdsWed offer URL format:
+    // https://adswedmedia.com/offer/Pn0Zz9/[USER_ID]
+    const url = `https://adswedmedia.com/offer/Pn0Zz9/${encodeURIComponent(
+      data.user.id
+    )}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="min-h-screen w-full text-white relative overflow-hidden">
       {/* ✅ BACKGROUND IMAGE */}
@@ -111,6 +127,39 @@ export default function EarnPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* ADSWED */}
+              <div
+                onClick={openAdsWed}
+                className="
+                  group cursor-pointer
+                  rounded-3xl bg-white/[0.02]
+                  ring-1 ring-white/10 backdrop-blur-xl p-5
+                  transition
+                  hover:bg-white/[0.035]
+                  hover:ring-sky-400/40
+                "
+              >
+                <div className="h-[3px] w-full rounded-full bg-sky-400/80" />
+
+                <div className="mt-3">
+                  <span className="rounded-full bg-sky-400/10 text-sky-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-sky-400/25">
+                    NEW
+                  </span>
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
+                  <div className="relative h-20 w-full flex items-center justify-center">
+                    <span className="text-black font-extrabold tracking-tight">
+                      ADSWED
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-xs text-white/50">
+                  Complete offers and earn coins.
+                </div>
+              </div>
+
               {/* GEMIWALL */}
               <div
                 onClick={openGemiWall}
@@ -206,7 +255,9 @@ export default function EarnPage() {
                       />
                     </div>
                     <div>
-                      <div className="font-extrabold tracking-tight">CPX RESEARCH</div>
+                      <div className="font-extrabold tracking-tight">
+                        CPX RESEARCH
+                      </div>
                       <div className="text-xs text-white/50">
                         High quality surveys
                       </div>
@@ -246,7 +297,6 @@ export default function EarnPage() {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
