@@ -8,7 +8,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
       <div className="fixed inset-0 -z-10 transform-gpu [will-change:transform]">
         <Image
           src="/bg/earn-bg.jpg"
-          alt="Background"
+          alt=""
           fill
           priority
           className="object-cover"
