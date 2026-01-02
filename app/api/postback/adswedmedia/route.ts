@@ -36,7 +36,6 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: Missing secret", { status: 500 });
     }
 
-    // Signature: MD5(subId + transId + reward + secret)
     const expected1 = md5(`${subId}${transId}${rewardStr}${secret}`).toLowerCase();
     const expected2 = roundRewardStr
       ? md5(`${subId}${transId}${roundRewardStr}${secret}`).toLowerCase()
@@ -71,7 +70,7 @@ export async function GET(req: Request) {
     // 1) idempotency
     const { error: insErr } = await admin.from("adswed_postbacks").insert({
       trans_id: transId,
-      user_id: subId, // profiles.id
+      user_id: subId,
       delta,
       reward,
       payout: searchParams.get("payout") ? Number(searchParams.get("payout")) : null,
@@ -87,7 +86,7 @@ export async function GET(req: Request) {
       return new NextResponse("ERROR: DB insert failed", { status: 500 });
     }
 
-    // 2) points update via RPC (returns updated_count)
+    // 2) points update (RPC returns updated row count integer)
     const { data: updatedCount, error: rpcErr } = await admin.rpc("increment_points", {
       p_user_id: subId,
       p_delta: delta,
@@ -99,7 +98,6 @@ export async function GET(req: Request) {
     }
 
     if (!updatedCount || Number(updatedCount) < 1) {
-      // user not found in profiles
       console.log("ADSWED_USER_NOT_FOUND", { subId, transId });
       return new NextResponse("ERROR: User not found", { status: 400 });
     }
