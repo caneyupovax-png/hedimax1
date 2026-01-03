@@ -11,30 +11,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
     }
 
-    // Server env tercih edilir, yoksa NEXT_PUBLIC fallback (kolaylık için)
-    const appId = process.env.NOTIK_APP_ID || process.env.NEXT_PUBLIC_NOTIK_APP_ID;
-    const pubId = process.env.NOTIK_PUB_ID || process.env.NEXT_PUBLIC_NOTIK_PUB_ID;
+    const appId = process.env.NOTIK_APP_ID;
+    const pubId = process.env.NOTIK_PUB_ID;
+    const secret = process.env.NOTIK_SECRET;
 
-    if (!appId || !pubId) {
+    if (!appId || !pubId || !secret) {
       return NextResponse.json(
-        {
-          error:
-            "Missing env: NOTIK_APP_ID / NOTIK_PUB_ID (or NEXT_PUBLIC_NOTIK_APP_ID / NEXT_PUBLIC_NOTIK_PUB_ID)",
-        },
+        { error: "Missing env: NOTIK_APP_ID / NOTIK_PUB_ID / NOTIK_SECRET" },
         { status: 500 }
       );
     }
 
-    // Notik offerwall base (değişirse tek yerden override edebil)
-    // Panel başka bir link veriyorsa buraya koy:
-    // NOTIK_OFFERWALL_BASE=https://notik.me/coins
-    const base = process.env.NOTIK_OFFERWALL_BASE || "https://notik.me/coins";
-
-    // ✅ User-facing offerwall URL: api_key YOK (API key genelde sadece API çağrılarında)
+    /**
+     * ✅ NOTIK OFFFERWALL URL (DOĞRU)
+     * api_key DEĞİL → secret kullanılır
+     */
     const url =
-      `${base}` +
+      `https://notik.me/coins` +
       `?app_id=${encodeURIComponent(appId)}` +
       `&pub_id=${encodeURIComponent(pubId)}` +
+      `&key=${encodeURIComponent(secret)}` +
       `&user_id=${encodeURIComponent(userId)}`;
 
     return NextResponse.json({ url }, { status: 200 });
