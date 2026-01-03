@@ -23,7 +23,7 @@ export default function EarnPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(""), 2200);
+    toastTimer.current = window.setTimeout(() => setToast(""), 2500);
   };
 
   const providers: Provider[] = [
@@ -76,8 +76,6 @@ export default function EarnPage() {
       return;
     }
 
-    // ✅ YOUR AdsWed offer URL format:
-    // https://adswedmedia.com/offer/Pn0Zz9/[USER_ID]
     const url = `https://adswedmedia.com/offer/Pn0Zz9/${encodeURIComponent(
       data.user.id
     )}`;
@@ -85,7 +83,6 @@ export default function EarnPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // ✅ NOTIK: URL server’dan alınır (client’ta secret taşımayız)
   const openNotik = async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
@@ -101,24 +98,17 @@ export default function EarnPage() {
       return;
     }
 
-    // daha net hata
     showToast(json?.error || "Failed to open Notik");
   };
 
   return (
     <div className="min-h-screen w-full text-white relative overflow-hidden">
-      {/* ✅ BACKGROUND IMAGE */}
       <div
         className="pointer-events-none absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage: "url('/bg/earn-bg.png')",
-        }}
+        style={{ backgroundImage: "url('/bg/earn-bg.png')" }}
       />
-
-      {/* overlay */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/60 to-black/85" />
 
-      {/* toast */}
       {toast && (
         <div className="fixed top-24 right-6 z-50">
           <div className="rounded-xl bg-black/70 ring-1 ring-white/10 px-4 py-3 text-sm">
@@ -129,7 +119,6 @@ export default function EarnPage() {
 
       <div className="relative z-10 px-6 lg:px-10 py-10">
         <div className="mx-auto w-full max-w-7xl">
-          {/* header */}
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">Earn</h1>
             <p className="mt-1 text-sm text-white/60">
@@ -147,7 +136,7 @@ export default function EarnPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* NOTIK (NEW) */}
+              {/* NOTIK */}
               <div
                 onClick={openNotik}
                 className="
@@ -160,13 +149,11 @@ export default function EarnPage() {
                 "
               >
                 <div className="h-[3px] w-full rounded-full bg-indigo-400/80" />
-
                 <div className="mt-3">
                   <span className="rounded-full bg-indigo-400/10 text-indigo-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-indigo-400/25">
                     NEW
                   </span>
                 </div>
-
                 <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
                   <div className="relative h-20 w-full flex items-center justify-center">
                     <span className="text-black font-extrabold tracking-tight">
@@ -174,7 +161,6 @@ export default function EarnPage() {
                     </span>
                   </div>
                 </div>
-
                 <div className="mt-3 text-xs text-white/50">
                   Complete offers and earn coins.
                 </div>
@@ -193,13 +179,11 @@ export default function EarnPage() {
                 "
               >
                 <div className="h-[3px] w-full rounded-full bg-sky-400/80" />
-
                 <div className="mt-3">
                   <span className="rounded-full bg-sky-400/10 text-sky-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-sky-400/25">
                     NEW
                   </span>
                 </div>
-
                 <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
                   <div className="relative h-20 w-full flex items-center justify-center">
                     <span className="text-black font-extrabold tracking-tight">
@@ -207,7 +191,6 @@ export default function EarnPage() {
                     </span>
                   </div>
                 </div>
-
                 <div className="mt-3 text-xs text-white/50">
                   Complete offers and earn coins.
                 </div>
@@ -226,13 +209,11 @@ export default function EarnPage() {
                 "
               >
                 <div className="h-[3px] w-full rounded-full bg-emerald-400/80" />
-
                 <div className="mt-3">
                   <span className="rounded-full bg-emerald-400/10 text-emerald-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-emerald-400/25">
                     NEW
                   </span>
                 </div>
-
                 <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
                   <div className="relative h-20 w-full">
                     <Image
@@ -244,13 +225,11 @@ export default function EarnPage() {
                     />
                   </div>
                 </div>
-
                 <div className="mt-3 text-xs text-white/50">
                   Complete offers and earn coins.
                 </div>
               </div>
 
-              {/* Other providers */}
               {providers.map((p) => (
                 <div
                   key={p.slug}
@@ -290,68 +269,3 @@ export default function EarnPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Survey Partners</h2>
               <span className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-white/70">
-                Surveys
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="group rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-11 w-11 rounded-xl bg-white overflow-hidden ring-1 ring-white/15">
-                      <Image
-                        src="/partners/cpx.png"
-                        alt="CPX Research"
-                        fill
-                        className="object-contain p-1"
-                        priority
-                      />
-                    </div>
-                    <div>
-                      <div className="font-extrabold tracking-tight">
-                        CPX RESEARCH
-                      </div>
-                      <div className="text-xs text-white/50">
-                        High quality surveys
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={openCPX}
-                    className="rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-black transition hover:opacity-95"
-                  >
-                    Open
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-3xl bg-white/[0.02] ring-1 ring-white/10 backdrop-blur-xl p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center font-bold">
-                      +
-                    </div>
-                    <div>
-                      <div className="font-semibold">More partners</div>
-                      <div className="text-xs text-white/45">Coming soon</div>
-                    </div>
-                  </div>
-
-                  <span className="rounded-full bg-white/[0.03] px-4 py-2 text-xs text-white/50 ring-1 ring-white/10">
-                    Soon
-                  </span>
-                </div>
-
-                <div className="mt-5 w-full rounded-2xl bg-white/[0.03] ring-1 ring-white/10 py-3 text-center text-sm text-white/40">
-                  Coming soon
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
