@@ -3,33 +3,48 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const rawUserId = searchParams.get("user_id");
+  try {
+    const { searchParams } = new URL(req.url);
+    const rawUserId = searchParams.get("user_id"); // supabase uuid
 
-  if (!rawUserId) {
-    return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
-  }
+    if (!rawUserId) {
+      return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
+    }
 
-  const apiKey = process.env.NOTIK_API_KEY;
-  const appId = process.env.NOTIK_APP_ID;
-  const pubId = process.env.NOTIK_PUB_ID;
+    const apiKey = process.env.NOTIK_API_KEY;
+    const appId = process.env.NOTIK_APP_ID;
+    const pubId = process.env.NOTIK_PUB_ID;
 
-  if (!apiKey || !appId || !pubId) {
+    if (!apiKey || !appId || !pubId) {
+      return NextResponse.json(
+        { error: "Missing env: NOTIK_API_KEY / NOTIK_APP_ID / NOTIK_PUB_ID" },
+        { status: 500 }
+      );
+    }
+
+    // ✅ UUID -> dashsiz 32 hex
+    const uuidNoDash = rawUserId.replace(/-/g, "").toLowerCase();
+
+    // ekstra güvenlik
+    if (!/^[0-9a-f]{32}$/.test(uuidNoDash)) {
+      return NextResponse.json(
+        { error: "Bad user_id format (expected UUID)" },
+        { status: 400 }
+      );
+    }
+
+    const url =
+      `https://notik.me/coins` +
+      `?api_key=${encodeURIComponent(apiKey)}` +
+      `&pub_id=${encodeURIComponent(pubId)}` +
+      `&app_id=${encodeURIComponent(appId)}` +
+      `&user_id=${encodeURIComponent(uuidNoDash)}`;
+
+    return NextResponse.json({ url }, { status: 200 });
+  } catch (e: any) {
     return NextResponse.json(
-      { error: "Missing env: NOTIK_API_KEY / NOTIK_APP_ID / NOTIK_PUB_ID" },
+      { error: e?.message || "Unknown error" },
       { status: 500 }
     );
   }
-
-  // ✅ UUID -> tireleri kaldır (Notik uyumlu)
-  const notikUserId = rawUserId.replace(/-/g, "");
-
-  const url =
-    `https://notik.me/coins` +
-    `?api_key=${encodeURIComponent(apiKey)}` +
-    `&pub_id=${encodeURIComponent(pubId)}` +
-    `&app_id=${encodeURIComponent(appId)}` +
-    `&user_id=${encodeURIComponent(notikUserId)}`;
-
-  return NextResponse.json({ url });
 }
