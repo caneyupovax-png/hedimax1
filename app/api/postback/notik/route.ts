@@ -1,77 +1,138 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export async function GET(req: Request) {
+function pick(params: Record<string, string>, keys: string[]) {
+  for (const k of keys) {
+    const v = params[k];
+    if (v && v.trim() !== "") return v.trim();
+  }
+  return "";
+}
+
+async function readAllParams(req: Request) {
+  const url = new URL(req.url);
+  const query = Object.fromEntries(url.searchParams.entries()) as Record<string, string>;
+
+  if (req.method !== "POST") return query;
+
+  const ct = (req.headers.get("content-type") || "").toLowerCase();
+
   try {
-    const { searchParams } = new URL(req.url);
-
-    const subId = searchParams.get("subId");
-    const transId = searchParams.get("transId");
-    const rewardStr = searchParams.get("reward");
-    const statusStr = searchParams.get("status") || "1";
-
-    if (!subId || !transId || !rewardStr) {
-      return new NextResponse("MISSING_PARAMS", { status: 400 });
+    if (ct.includes("application/json")) {
+      const body = (await req.json()) as Record<string, any>;
+      const b: Record<string, string> = {};
+      for (const [k, v] of Object.entries(body)) b[k] = String(v);
+      return { ...query, ...b };
     }
 
-    const reward = Number(rewardStr);
-    const status = Number(statusStr);
-
-    if (status !== 1 || reward <= 0) {
-      return new NextResponse("IGNORED", { status: 200 });
+    if (ct.includes("application/x-www-form-urlencoded") || ct.includes("multipart/form-data")) {
+      const fd = await req.formData();
+      const b: Record<string, string> = {};
+      fd.forEach((v, k) => (b[k] = String(v)));
+      return { ...query, ...b };
     }
+  } catch {
+    // ignore parse errors
+  }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return query;
+}
+
+async function handler(req: Request) {
+  const params = await readAllParams(req);
+
+  // User id comes in different names
+  const userId = pick(params, ["subId", "user_id", "s1", "sub_id"]);
+  const transId = pick(params, ["transId", "txn_id", "transaction_id", "txnId"]);
+  const rewardStr = pick(params, ["reward", "amount"]);
+  const statusStr = pick(params, ["status"]);
+
+  if (!userId || !transId || !rewardStr) {
+    return new NextResponse(
+      `MISSING_PARAMS userId=${userId || "-"} transId=${transId || "-"} reward=${rewardStr || "-"}`,
+      { status: 400 }
     );
+  }
 
-    // 🔒 Duplicate check
-    const { data: dup } = await supabase
+  const reward = Number(rewardStr);
+  const status = Number(statusStr || "1");
+
+  if (!Number.isFinite(reward) || reward <= 0) return new NextResponse("IGNORED_REWARD", { status: 200 });
+  if (status !== 1) return new NextResponse("IGNORED_STATUS", { status: 200 });
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+  // 🔥 This is the #1 cause on Vercel
+  if (!supabaseUrl || !serviceKey) {
+    return new NextResponse(
+      `MISSING_ENV url=${supabaseUrl ? "ok" : "missing"} service_role=${serviceKey ? "ok" : "missing"}`,
+      { status: 500 }
+    );
+  }
+
+  const admin = createClient(supabaseUrl, serviceKey);
+
+  // Duplicate check (best-effort; if table not exists, continue)
+  try {
+    const { data: dup, error: dupErr } = await admin
       .from("offerwall_conversions")
       .select("id")
       .eq("provider", "notik")
       .eq("transaction_id", transId)
       .maybeSingle();
 
-    if (dup) {
-      return new NextResponse("DUP", { status: 200 });
-    }
+    if (!dupErr && dup) return new NextResponse("DUP", { status: 200 });
+  } catch {
+    // ignore
+  }
 
-    // 🧾 Log conversion
-    await supabase.from("offerwall_conversions").insert({
+  // Log conversion (best-effort; do NOT block balance update)
+  try {
+    await admin.from("offerwall_conversions").insert({
       provider: "notik",
-      user_id: subId,
+      user_id: userId,
       transaction_id: transId,
       reward,
+      raw: params,
     });
-
-    // 💰 SADECE UPDATE (insert yok!)
-    const { data, error } = await supabase
-      .from("points_balance")
-      .select("balance")
-      .eq("user_id", subId)
-      .maybeSingle();
-
-    if (error || !data) {
-      return new NextResponse("USER_BALANCE_NOT_FOUND", { status: 400 });
-    }
-
-    const newBalance = Number(data.balance) + reward;
-
-    const { error: updErr } = await supabase
-      .from("points_balance")
-      .update({ balance: newBalance })
-      .eq("user_id", subId);
-
-    if (updErr) {
-      console.log("BALANCE_UPDATE_FAILED", updErr);
-      return new NextResponse("BALANCE_ERROR", { status: 500 });
-    }
-
-    return new NextResponse("OK", { status: 200 });
-  } catch (e) {
-    console.log("NOTIK_FATAL", e);
-    return new NextResponse("SERVER_ERROR", { status: 500 });
+  } catch {
+    // ignore
   }
+
+  // ✅ Update points_balance.balance
+  const { data: row, error: selErr } = await admin
+    .from("points_balance")
+    .select("balance")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (selErr) {
+    return new NextResponse(`BALANCE_SELECT_ERROR ${selErr.message}`, { status: 500 });
+  }
+  if (!row) {
+    return new NextResponse("USER_BALANCE_NOT_FOUND", { status: 400 });
+  }
+
+  const newBalance = Number(row.balance || 0) + reward;
+
+  const { error: updErr } = await admin
+    .from("points_balance")
+    .update({ balance: newBalance })
+    .eq("user_id", userId);
+
+  if (updErr) {
+    // 👇 This message will tell us exactly what's wrong (permission/rls/etc.)
+    return new NextResponse(`BALANCE_UPDATE_ERROR ${updErr.message}`, { status: 500 });
+  }
+
+  return new NextResponse("OK", { status: 200 });
+}
+
+export async function GET(req: Request) {
+  return handler(req);
+}
+
+export async function POST(req: Request) {
+  return handler(req);
 }
