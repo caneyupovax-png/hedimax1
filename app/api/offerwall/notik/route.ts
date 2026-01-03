@@ -5,13 +5,13 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("user_id");
+    const rawUserId = searchParams.get("user_id");
 
-    if (!userId) {
+    if (!rawUserId) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
     }
 
-    const apiKey = process.env.NOTIK_API_KEY; // ✅ App API KEY
+    const apiKey = process.env.NOTIK_API_KEY;
     const appId = process.env.NOTIK_APP_ID;
     const pubId = process.env.NOTIK_PUB_ID;
 
@@ -22,13 +22,15 @@ export async function GET(req: Request) {
       );
     }
 
-    // ✅ Notik panelindeki iframe src ile birebir aynı format:
+    // ✅ Notik bazı sistemlerde sadece [a-zA-Z0-9] kabul ediyor → UUID tirelerini kaldır
+    const notikUserId = rawUserId.replace(/-/g, "");
+
     const url =
       `https://notik.me/coins` +
       `?api_key=${encodeURIComponent(apiKey)}` +
       `&pub_id=${encodeURIComponent(pubId)}` +
       `&app_id=${encodeURIComponent(appId)}` +
-      `&user_id=${encodeURIComponent(userId)}`;
+      `&user_id=${encodeURIComponent(notikUserId)}`;
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (e: any) {
