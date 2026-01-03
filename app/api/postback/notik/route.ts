@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-function isUuid(v: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-}
-
 function pick(params: Record<string, string>, keys: string[]) {
   for (const k of keys) {
     const v = (params[k] || "").trim();
     if (v) return v;
   }
   return "";
+}
+
+function isUuid(v: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
 
 async function readAllParams(req: Request) {
@@ -35,109 +35,121 @@ async function readAllParams(req: Request) {
       return { ...query, ...b };
     }
   } catch {
-    // ignore
+    // ignore body parse errors
   }
 
   return query;
 }
 
+/**
+ * IMPORTANT:
+ * - Always return 200 OK to Notik (no more 400/409).
+ * - Only credit when params are valid and status=1 and reward>0.
+ * - Duplicate txn_id will NOT credit again, but still returns 200.
+ */
 async function handler(req: Request) {
-  const params = await readAllParams(req);
-
-  // Notik: best is s1 (Sub ID)
-  const subId = pick(params, ["s1", "subId", "user_id", "sub_id"]);
-  const transId = pick(params, ["transId", "txn_id", "transaction_id"]);
-  const rewardStr = pick(params, ["reward", "amount"]);
-  const statusStr = pick(params, ["status"]) || "1";
-
-  if (!subId || !transId || !rewardStr) {
-    return new NextResponse(
-      `MISSING_PARAMS subId=${subId || "-"} transId=${transId || "-"} reward=${rewardStr || "-"}`,
-      { status: 400 }
-    );
-  }
-
-  if (!isUuid(subId)) {
-    return new NextResponse(`INVALID_USER_ID ${subId}`, { status: 400 });
-  }
-
-  const reward = Number(rewardStr);
-  const status = Number(statusStr);
-
-  if (!Number.isFinite(reward) || reward <= 0) {
-    return new NextResponse(`IGNORED_REWARD ${rewardStr}`, { status: 400 });
-  }
-
-  if (status !== 1) {
-    return new NextResponse(`IGNORED_STATUS ${status}`, { status: 400 });
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!supabaseUrl || !serviceKey) {
-    return new NextResponse("MISSING_ENV", { status: 500 });
-  }
-
-  const admin: any = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // Duplicate check (hard-block, and return 409 so Notik won’t show Success)
   try {
-    const { data: dup, error: dupErr } = await admin
-      .from("offerwall_conversions")
-      .select("id")
-      .eq("provider", "notik")
-      .eq("transaction_id", transId)
+    const params = await readAllParams(req);
+
+    // Prefer s1 (Notik Sub ID) -> subId -> user_id
+    const subId = pick(params, ["s1", "subId", "user_id", "sub_id"]);
+    const transId = pick(params, ["transId", "txn_id", "transaction_id"]);
+    const rewardStr = pick(params, ["reward", "amount"]);
+    const statusStr = pick(params, ["status"]);
+    const status = Number(statusStr || "1");
+    const reward = Number(rewardStr || "0");
+
+    // Always 200, but tell reason in body
+    if (!subId || !transId || !rewardStr) {
+      return new NextResponse("OK:MISSING_PARAMS", { status: 200 });
+    }
+
+    if (!isUuid(subId)) {
+      return new NextResponse("OK:INVALID_USER_ID", { status: 200 });
+    }
+
+    if (!Number.isFinite(reward) || reward <= 0) {
+      return new NextResponse("OK:IGNORED_REWARD", { status: 200 });
+    }
+
+    if (status !== 1) {
+      return new NextResponse("OK:IGNORED_STATUS", { status: 200 });
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    if (!supabaseUrl || !serviceKey) {
+      return new NextResponse("OK:MISSING_ENV", { status: 200 });
+    }
+
+    const admin: any = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // Duplicate check (no double credit)
+    try {
+      const { data: dup, error: dupErr } = await admin
+        .from("offerwall_conversions")
+        .select("id")
+        .eq("provider", "notik")
+        .eq("transaction_id", transId)
+        .maybeSingle();
+
+      if (!dupErr && dup) {
+        return new NextResponse("OK:DUP", { status: 200 });
+      }
+    } catch {
+      // if table doesn't exist, skip duplicate check
+    }
+
+    // Get current balance
+    const { data: row, error: selErr } = await admin
+      .from("points_balance")
+      .select("balance")
+      .eq("user_id", subId)
       .maybeSingle();
 
-    if (!dupErr && dup) {
-      return new NextResponse(`DUP ${transId}`, { status: 409 });
+    if (selErr) {
+      // Still return 200 so Notik doesn't fail; you can see this in Vercel logs if needed
+      console.log("NOTIK_BALANCE_SELECT_ERROR", selErr);
+      return new NextResponse("OK:BALANCE_SELECT_ERROR", { status: 200 });
     }
-  } catch {
-    // if table missing, skip
+
+    if (!row) {
+      return new NextResponse("OK:USER_BALANCE_NOT_FOUND", { status: 200 });
+    }
+
+    const next = Number(row.balance || 0) + reward;
+
+    const { error: updErr } = await admin
+      .from("points_balance")
+      .update({ balance: next })
+      .eq("user_id", subId);
+
+    if (updErr) {
+      console.log("NOTIK_BALANCE_UPDATE_ERROR", updErr);
+      return new NextResponse("OK:BALANCE_UPDATE_ERROR", { status: 200 });
+    }
+
+    // Log conversion best-effort
+    try {
+      await admin.from("offerwall_conversions").insert({
+        provider: "notik",
+        user_id: subId,
+        transaction_id: transId,
+        reward,
+        raw: params,
+      });
+    } catch (e) {
+      console.log("NOTIK_LOG_INSERT_FAILED", e);
+      // do not fail
+    }
+
+    return new NextResponse("OK", { status: 200 });
+  } catch (e) {
+    console.log("NOTIK_SERVER_ERROR", e);
+    return new NextResponse("OK:SERVER_ERROR", { status: 200 });
   }
-
-  // Update points_balance.balance
-  const { data: row, error: selErr } = await admin
-    .from("points_balance")
-    .select("balance")
-    .eq("user_id", subId)
-    .maybeSingle();
-
-  if (selErr) {
-    return new NextResponse(`BALANCE_SELECT_ERROR ${selErr.message}`, { status: 500 });
-  }
-  if (!row) {
-    return new NextResponse("USER_BALANCE_NOT_FOUND", { status: 400 });
-  }
-
-  const current = Number(row.balance || 0);
-  const next = current + reward;
-
-  const { error: updErr } = await admin
-    .from("points_balance")
-    .update({ balance: next })
-    .eq("user_id", subId);
-
-  if (updErr) {
-    return new NextResponse(`BALANCE_UPDATE_ERROR ${updErr.message}`, { status: 500 });
-  }
-
-  // Log conversion (best-effort after balance succeeded)
-  try {
-    await admin.from("offerwall_conversions").insert({
-      provider: "notik",
-      user_id: subId,
-      transaction_id: transId,
-      reward,
-      raw: params,
-    });
-  } catch {
-    // ignore
-  }
-
-  return new NextResponse("OK", { status: 200 });
 }
 
 export async function GET(req: Request) {
