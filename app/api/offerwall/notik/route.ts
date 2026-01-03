@@ -16,20 +16,20 @@ export async function GET(req: Request) {
 
   if (!apiKey || !appId || !pubId) {
     return NextResponse.json(
-      { error: "Missing env" },
+      { error: "Missing env: NOTIK_API_KEY / NOTIK_APP_ID / NOTIK_PUB_ID" },
       { status: 500 }
     );
   }
 
-  // ✅ NOTIK UYUMLU USER ID
-  const notikUserId = "U" + rawUserId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
+  // ✅ UUID -> tireleri kaldır (Notik uyumlu)
+  const notikUserId = rawUserId.replace(/-/g, "");
 
   const url =
     `https://notik.me/coins` +
-    `?api_key=${apiKey}` +
-    `&pub_id=${pubId}` +
-    `&app_id=${appId}` +
-    `&user_id=${notikUserId}`;
+    `?api_key=${encodeURIComponent(apiKey)}` +
+    `&pub_id=${encodeURIComponent(pubId)}` +
+    `&app_id=${encodeURIComponent(appId)}` +
+    `&user_id=${encodeURIComponent(notikUserId)}`;
 
   return NextResponse.json({ url });
 }
