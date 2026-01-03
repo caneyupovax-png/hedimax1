@@ -11,29 +11,29 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
     }
 
+    const apiKey = process.env.NOTIK_API_KEY; // ✅ App API KEY
     const appId = process.env.NOTIK_APP_ID;
     const pubId = process.env.NOTIK_PUB_ID;
-    const secret = process.env.NOTIK_SECRET;
 
-    if (!appId || !pubId || !secret) {
+    if (!apiKey || !appId || !pubId) {
       return NextResponse.json(
-        { error: "Missing env: NOTIK_APP_ID / NOTIK_PUB_ID / NOTIK_SECRET" },
+        { error: "Missing env: NOTIK_API_KEY / NOTIK_APP_ID / NOTIK_PUB_ID" },
         { status: 500 }
       );
     }
 
     /**
-     * ✅ NOTIK OFFFERWALL URL (DOĞRU)
-     * api_key DEĞİL → secret kullanılır
+     * ✅ NOTIK OFFERWALL (COINS) URL
+     * secret YOK
      */
     const url =
       `https://notik.me/coins` +
-      `?app_id=${encodeURIComponent(appId)}` +
+      `?api_key=${encodeURIComponent(apiKey)}` +
+      `&app_id=${encodeURIComponent(appId)}` +
       `&pub_id=${encodeURIComponent(pubId)}` +
-      `&key=${encodeURIComponent(secret)}` +
-      `&user_id=${encodeURIComponent(userId)}`;
+      `&subId=${encodeURIComponent(userId)}`;
 
-    return NextResponse.json({ url }, { status: 200 });
+    return NextResponse.json({ url });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message || "Unknown error" },
