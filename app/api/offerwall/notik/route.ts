@@ -11,7 +11,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
     }
 
-    const apiKey = process.env.NOTIK_API_KEY; // ✅ App API KEY (J34c...)
+    const apiKey = process.env.NOTIK_API_KEY; // ✅ App API KEY
     const appId = process.env.NOTIK_APP_ID;
     const pubId = process.env.NOTIK_PUB_ID;
 
@@ -22,13 +22,13 @@ export async function GET(req: Request) {
       );
     }
 
-    // Callback URL'inde subId kullanıyorsun, o yüzden click'te de subId gönderiyoruz.
+    // ✅ Notik panelindeki iframe src ile birebir aynı format:
     const url =
       `https://notik.me/coins` +
       `?api_key=${encodeURIComponent(apiKey)}` +
       `&pub_id=${encodeURIComponent(pubId)}` +
       `&app_id=${encodeURIComponent(appId)}` +
-      `&subId=${encodeURIComponent(userId)}`;
+      `&user_id=${encodeURIComponent(userId)}`;
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (e: any) {
