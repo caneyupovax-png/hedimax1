@@ -11,13 +11,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
     }
 
-    const apiKey = process.env.NOTIK_API_KEY;
     const appId = process.env.NOTIK_APP_ID;
     const pubId = process.env.NOTIK_PUB_ID;
 
-    if (!apiKey || !appId || !pubId) {
+    // Not: Iframe URL'si için api_key gerekli değildir, bu yüzden burada kontrol etmiyoruz.
+    if (!appId || !pubId) {
       return NextResponse.json(
-        { error: "Missing env: NOTIK_API_KEY / NOTIK_APP_ID / NOTIK_PUB_ID" },
+        { error: "Missing env: NOTIK_APP_ID / NOTIK_PUB_ID" },
         { status: 500 }
       );
     }
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     // ✅ Notik user_id = UUID'nin tireleri kaldırılmış hali (32 hex)
     const notikUserId = rawUserId.replace(/-/g, "").toLowerCase();
 
-    // UUID değilse (mesela test123) hata döndür
+    // UUID format kontrolü
     if (!/^[0-9a-f]{32}$/.test(notikUserId)) {
       return NextResponse.json(
         { error: "Bad user_id format (expected UUID)" },
@@ -33,13 +33,9 @@ export async function GET(req: Request) {
       );
     }
 
-    // ✅ Notik dokümanındaki iframe URL formatı (birebir)
-    const url =
-      `https://notik.me/coins` +
-      `?api_key=${encodeURIComponent(apiKey)}` +
-      `&pub_id=${encodeURIComponent(pubId)}` +
-      `&app_id=${encodeURIComponent(appId)}` +
-      `&user_id=${encodeURIComponent(notikUserId)}`;
+    // ✅ DÜZELTİLMİŞ NOTIK IFRAME URL FORMATI
+    // App ID, URL yolunda (path) olmalı, pub_id ve user_id ise query parametresi olmalı.
+    const url = `https://notik.me/coins/api/get-offers/${appId}?pub_id=${pubId}&user_id=${notikUserId}`;
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (e: any) {
