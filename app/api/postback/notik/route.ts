@@ -42,31 +42,28 @@ async function readAllParams(req: Request) {
 }
 
 /**
- * NOTIK POSTBACK (minimal + guaranteed)
- * - No offerwall_conversions table needed.
- * - Credits points_balance.balance only.
- * - Always returns 200 so Notik won't show "failed".
- *
- * Expected:
- *  subId from s1/subId/user_id (must be UUID)
- *  reward from amount/reward (must be >0)
- *  status=1 to credit
+ * NOTIK POSTBACK (robust)
+ * - Credits points_balance.balance
+ * - Accepts reward from: amount OR payout OR reward
+ * - Always returns 200 (Notik panel fail göstermesin)
  */
 async function handler(req: Request) {
   try {
     const params = await readAllParams(req);
 
-    const subId = pick(params, ["s1", "subId", "user_id", "sub_id"]);
-    const transId = pick(params, ["transId", "txn_id", "transaction_id"]); // sadece debug amaçlı
-    const rewardStr = pick(params, ["reward", "amount"]);
-    const statusStr = pick(params, ["status"]) || "1";
+    // 🔍 log: Vercel runtime logs’ta gözüksün
+    console.log("NOTIK_IN", { url: req.url, params });
 
-    // Notik fail göstermesin diye hep 200 döndür
+    const subId = pick(params, ["s1", "subId", "user_id", "sub_id"]);
+    const transId = pick(params, ["transId", "txn_id", "transaction_id", "txnId"]);
+    const rewardStr = pick(params, ["amount", "payout", "reward"]); // ✅ payout fallback eklendi
+    const statusStr = pick(params, ["status"]); // bazen gelmez
+
     if (!subId || !rewardStr) return new NextResponse("OK:MISSING_PARAMS", { status: 200 });
     if (!isUuid(subId)) return new NextResponse("OK:INVALID_USER_ID", { status: 200 });
 
     const reward = Number(rewardStr);
-    const status = Number(statusStr);
+    const status = Number(statusStr || "1"); // status yoksa 1 kabul
 
     if (!Number.isFinite(reward) || reward <= 0) return new NextResponse("OK:IGNORED_REWARD", { status: 200 });
     if (status !== 1) return new NextResponse("OK:IGNORED_STATUS", { status: 200 });
@@ -79,7 +76,7 @@ async function handler(req: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // points_balance mevcut satırı bul
+    // points_balance mevcut satırı çek
     const { data: row, error: selErr } = await admin
       .from("points_balance")
       .select("balance")
@@ -87,11 +84,12 @@ async function handler(req: Request) {
       .maybeSingle();
 
     if (selErr) {
-      console.log("NOTIK_BALANCE_SELECT_ERROR", selErr, { subId, transId, rewardStr, statusStr, params });
+      console.log("NOTIK_BALANCE_SELECT_ERROR", selErr);
       return new NextResponse("OK:BALANCE_SELECT_ERROR", { status: 200 });
     }
+
     if (!row) {
-      console.log("NOTIK_USER_BALANCE_NOT_FOUND", { subId, transId, params });
+      console.log("NOTIK_USER_BALANCE_NOT_FOUND", { subId, transId });
       return new NextResponse("OK:USER_BALANCE_NOT_FOUND", { status: 200 });
     }
 
@@ -103,7 +101,7 @@ async function handler(req: Request) {
       .eq("user_id", subId);
 
     if (updErr) {
-      console.log("NOTIK_BALANCE_UPDATE_ERROR", updErr, { subId, transId, next, params });
+      console.log("NOTIK_BALANCE_UPDATE_ERROR", updErr);
       return new NextResponse("OK:BALANCE_UPDATE_ERROR", { status: 200 });
     }
 
