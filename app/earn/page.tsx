@@ -32,32 +32,29 @@ export default function EarnPage() {
     { name: "AdGate", slug: "adgate", color: "#2dd4bf", comingSoon: true },
   ];
 
-  const requireAuth = async () => {
+  const openCPX = async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
       router.push("/login?next=/earn");
-      return null;
+      return;
     }
-    return data.user;
-  };
 
-  const openCPX = async () => {
-    const user = await requireAuth();
-    if (!user) return;
-
-    const res = await fetch(`/api/offerwall/cpx?user_id=${user.id}`);
+    const res = await fetch(`/api/offerwall/cpx?user_id=${data.user.id}`);
     const json = await res.json().catch(() => ({} as any));
 
     if (json?.url) {
       window.open(json.url, "_blank", "noopener,noreferrer");
     } else {
-      showToast("Failed to open CPX");
+      showToast(json?.error || "Failed to open CPX");
     }
   };
 
   const openGemiWall = async () => {
-    const user = await requireAuth();
-    if (!user) return;
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push("/login?next=/earn");
+      return;
+    }
 
     const placementId = process.env.NEXT_PUBLIC_GEMIWALL_PLACEMENT_ID;
     if (!placementId) {
@@ -67,37 +64,45 @@ export default function EarnPage() {
 
     const url = `https://gemiwall.com/${encodeURIComponent(
       placementId
-    )}/${encodeURIComponent(user.id)}`;
+    )}/${encodeURIComponent(data.user.id)}`;
 
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const openAdsWed = async () => {
-    const user = await requireAuth();
-    if (!user) return;
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push("/login?next=/earn");
+      return;
+    }
 
     // ✅ YOUR AdsWed offer URL format:
     // https://adswedmedia.com/offer/Pn0Zz9/[USER_ID]
     const url = `https://adswedmedia.com/offer/Pn0Zz9/${encodeURIComponent(
-      user.id
+      data.user.id
     )}`;
 
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // ✅ NOTIK (404 fix): URL server’dan alınır (api_key client’a çıkmaz)
+  // ✅ NOTIK: URL server’dan alınır (client’ta secret taşımayız)
   const openNotik = async () => {
-    const user = await requireAuth();
-    if (!user) return;
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push("/login?next=/earn");
+      return;
+    }
 
-    const res = await fetch(`/api/offerwall/notik?user_id=${user.id}`);
+    const res = await fetch(`/api/offerwall/notik?user_id=${data.user.id}`);
     const json = await res.json().catch(() => ({} as any));
 
     if (json?.url) {
       window.open(json.url, "_blank", "noopener,noreferrer");
-    } else {
-      showToast(json?.error || "Failed to open Notik");
+      return;
     }
+
+    // daha net hata
+    showToast(json?.error || "Failed to open Notik");
   };
 
   return (
