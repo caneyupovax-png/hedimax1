@@ -41,57 +41,58 @@ async function readAllParams(req: Request) {
   return query;
 }
 
-/**
- * NOTIK POSTBACK (robust)
- * - Credits points_balance.balance
- * - Accepts reward from: amount OR payout OR reward
- * - Always returns 200 (Notik panel fail göstermesin)
- */
 async function handler(req: Request) {
   try {
     const params = await readAllParams(req);
 
-    // 🔍 log: Vercel runtime logs’ta gözüksün
-    console.log("NOTIK_IN", { url: req.url, params });
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    const admin: any =
+      supabaseUrl && serviceKey
+        ? createClient(supabaseUrl, serviceKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          })
+        : null;
 
+    // ✅ 1) DEBUG: Notik tam olarak ne gönderiyor? Supabase’e yaz.
+    if (admin) {
+      try {
+        await admin.from("postback_debug").insert({
+          provider: "notik",
+          raw: params,
+        });
+      } catch (e) {
+        // debug insert fail olsa bile devam
+        console.log("POSTBACK_DEBUG_INSERT_FAILED", e);
+      }
+    }
+
+    // ✅ 2) Parametreleri en esnek şekilde oku
     const subId = pick(params, ["s1", "subId", "user_id", "sub_id"]);
     const transId = pick(params, ["transId", "txn_id", "transaction_id", "txnId"]);
-    const rewardStr = pick(params, ["amount", "payout", "reward"]); // ✅ payout fallback eklendi
+    const rewardStr = pick(params, ["amount", "reward", "payout"]);
     const statusStr = pick(params, ["status"]); // bazen gelmez
 
-    if (!subId || !rewardStr) return new NextResponse("OK:MISSING_PARAMS", { status: 200 });
-    if (!isUuid(subId)) return new NextResponse("OK:INVALID_USER_ID", { status: 200 });
+    if (!subId || !rewardStr) return new NextResponse("MISSING_PARAMS", { status: 200 });
+    if (!isUuid(subId)) return new NextResponse(`INVALID_USER_ID:${subId}`, { status: 200 });
 
     const reward = Number(rewardStr);
     const status = Number(statusStr || "1"); // status yoksa 1 kabul
 
-    if (!Number.isFinite(reward) || reward <= 0) return new NextResponse("OK:IGNORED_REWARD", { status: 200 });
-    if (status !== 1) return new NextResponse("OK:IGNORED_STATUS", { status: 200 });
+    if (!Number.isFinite(reward) || reward <= 0) return new NextResponse(`IGNORED_REWARD:${rewardStr}`, { status: 200 });
+    if (status !== 1) return new NextResponse(`IGNORED_STATUS:${statusStr || "-"}`, { status: 200 });
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    if (!supabaseUrl || !serviceKey) return new NextResponse("OK:MISSING_ENV", { status: 200 });
+    if (!admin) return new NextResponse("MISSING_ENV", { status: 200 });
 
-    const admin: any = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // points_balance mevcut satırı çek
+    // ✅ 3) points_balance.balance artır
     const { data: row, error: selErr } = await admin
       .from("points_balance")
       .select("balance")
       .eq("user_id", subId)
       .maybeSingle();
 
-    if (selErr) {
-      console.log("NOTIK_BALANCE_SELECT_ERROR", selErr);
-      return new NextResponse("OK:BALANCE_SELECT_ERROR", { status: 200 });
-    }
-
-    if (!row) {
-      console.log("NOTIK_USER_BALANCE_NOT_FOUND", { subId, transId });
-      return new NextResponse("OK:USER_BALANCE_NOT_FOUND", { status: 200 });
-    }
+    if (selErr) return new NextResponse(`BALANCE_SELECT_ERROR:${selErr.message}`, { status: 200 });
+    if (!row) return new NextResponse("USER_BALANCE_NOT_FOUND", { status: 200 });
 
     const next = Number(row.balance || 0) + reward;
 
@@ -100,15 +101,12 @@ async function handler(req: Request) {
       .update({ balance: next })
       .eq("user_id", subId);
 
-    if (updErr) {
-      console.log("NOTIK_BALANCE_UPDATE_ERROR", updErr);
-      return new NextResponse("OK:BALANCE_UPDATE_ERROR", { status: 200 });
-    }
+    if (updErr) return new NextResponse(`BALANCE_UPDATE_ERROR:${updErr.message}`, { status: 200 });
 
     return new NextResponse("OK", { status: 200 });
-  } catch (e) {
+  } catch (e: any) {
     console.log("NOTIK_SERVER_ERROR", e);
-    return new NextResponse("OK:SERVER_ERROR", { status: 200 });
+    return new NextResponse("SERVER_ERROR", { status: 200 });
   }
 }
 
