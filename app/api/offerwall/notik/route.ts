@@ -5,42 +5,36 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const rawUserId = searchParams.get("user_id"); // Supabase UUID
+    const rawUserId = searchParams.get("user_id"); // Supabase'den gelen UUID
 
+    // 1. Kullanıcı ID kontrolü
     if (!rawUserId) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
     }
 
+    // 2. Ortam değişkenlerini al (Vercel Dashboard üzerinden tanımlanmalı)
     const appId = process.env.NOTIK_APP_ID;
     const pubId = process.env.NOTIK_PUB_ID;
 
-    // Not: Iframe URL'si için api_key gerekli değildir, bu yüzden burada kontrol etmiyoruz.
     if (!appId || !pubId) {
       return NextResponse.json(
-        { error: "Missing env: NOTIK_APP_ID / NOTIK_PUB_ID" },
+        { error: "Vercel üzerinde NOTIK_APP_ID veya NOTIK_PUB_ID eksik!" },
         { status: 500 }
       );
     }
 
-    // ✅ Notik user_id = UUID'nin tireleri kaldırılmış hali (32 hex)
+    // 3. Notik için user_id formatını temizle (UUID tirelerini kaldırır)
+    // Örn: 550e8400-e29b-41d4-a716-446655440000 -> 550e8400e29b41d4a716446655440000
     const notikUserId = rawUserId.replace(/-/g, "").toLowerCase();
 
-    // UUID format kontrolü
-    if (!/^[0-9a-f]{32}$/.test(notikUserId)) {
-      return NextResponse.json(
-        { error: "Bad user_id format (expected UUID)" },
-        { status: 400 }
-      );
-    }
-
-    // ✅ DÜZELTİLMİŞ NOTIK IFRAME URL FORMATI
-    // App ID, URL yolunda (path) olmalı, pub_id ve user_id ise query parametresi olmalı.
+    // 4. Doğru Iframe URL Yapılandırması
+    // NOT: Iframe linkinde api_key kullanılmaz, güvenlik hatasına yol açar.
     const url = `https://notik.me/coins/api/get-offers/${appId}?pub_id=${pubId}&user_id=${notikUserId}`;
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json(
-      { error: e?.message || "Unknown error" },
+      { error: e?.message || "Sunucu hatası oluştu" },
       { status: 500 }
     );
   }
