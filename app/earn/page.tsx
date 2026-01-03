@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -23,7 +23,7 @@ export default function EarnPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(""), 2500);
+    toastTimer.current = window.setTimeout(() => setToast(""), 2200);
   };
 
   const providers: Provider[] = [
@@ -31,6 +31,32 @@ export default function EarnPage() {
     { name: "MM Wall", slug: "mmwall", color: "#ef4444", comingSoon: true },
     { name: "AdGate", slug: "adgate", color: "#2dd4bf", comingSoon: true },
   ];
+
+  // -----------------------------
+  // NOTIK IFRAME MODAL STATE
+  // -----------------------------
+  const [notikOpen, setNotikOpen] = useState(false);
+  const [notikUrl, setNotikUrl] = useState<string>("");
+  const [notikLoading, setNotikLoading] = useState(false);
+
+  const closeNotik = () => {
+    setNotikOpen(false);
+    setNotikUrl("");
+    setNotikLoading(false);
+  };
+
+  // ESC closes modal
+  useEffect(() => {
+    if (!notikOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeNotik();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notikOpen]);
 
   const openCPX = async () => {
     const { data } = await supabase.auth.getUser();
@@ -45,7 +71,7 @@ export default function EarnPage() {
     if (json?.url) {
       window.open(json.url, "_blank", "noopener,noreferrer");
     } else {
-      showToast(json?.error || "Failed to open CPX");
+      showToast("Failed to open CPX");
     }
   };
 
@@ -76,6 +102,8 @@ export default function EarnPage() {
       return;
     }
 
+    // ✅ YOUR AdsWed offer URL format:
+    // https://adswedmedia.com/offer/Pn0Zz9/[USER_ID]
     const url = `https://adswedmedia.com/offer/Pn0Zz9/${encodeURIComponent(
       data.user.id
     )}`;
@@ -83,6 +111,7 @@ export default function EarnPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  // ✅ NOTIK: panelin önerdiği gibi iframe ile aç
   const openNotik = async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
@@ -90,25 +119,37 @@ export default function EarnPage() {
       return;
     }
 
+    setNotikOpen(true);
+    setNotikLoading(true);
+    setNotikUrl("");
+
     const res = await fetch(`/api/offerwall/notik?user_id=${data.user.id}`);
     const json = await res.json().catch(() => ({} as any));
 
     if (json?.url) {
-      window.open(json.url, "_blank", "noopener,noreferrer");
-      return;
+      setNotikUrl(json.url);
+      // iframe load olunca loading kapanacak
+    } else {
+      setNotikLoading(false);
+      showToast(json?.error || "Failed to open Notik");
+      // modal açık kalsın ama içerik gelmedi, kullanıcı kapatabilir
     }
-
-    showToast(json?.error || "Failed to open Notik");
   };
 
   return (
     <div className="min-h-screen w-full text-white relative overflow-hidden">
+      {/* ✅ BACKGROUND IMAGE */}
       <div
         className="pointer-events-none absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/bg/earn-bg.png')" }}
+        style={{
+          backgroundImage: "url('/bg/earn-bg.png')",
+        }}
       />
+
+      {/* overlay */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/60 to-black/85" />
 
+      {/* toast */}
       {toast && (
         <div className="fixed top-24 right-6 z-50">
           <div className="rounded-xl bg-black/70 ring-1 ring-white/10 px-4 py-3 text-sm">
@@ -117,8 +158,96 @@ export default function EarnPage() {
         </div>
       )}
 
+      {/* ✅ NOTIK MODAL */}
+      {notikOpen && (
+        <div className="fixed inset-0 z-[999]">
+          {/* backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={closeNotik}
+          />
+
+          {/* modal */}
+          <div className="absolute inset-0 p-4 sm:p-6 flex items-center justify-center">
+            <div className="w-full max-w-6xl h-[82vh] sm:h-[86vh] rounded-3xl bg-black/70 ring-1 ring-white/10 overflow-hidden backdrop-blur-xl">
+              {/* topbar */}
+              <div className="h-14 px-4 sm:px-6 flex items-center justify-between border-b border-white/10 bg-black/40">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center font-extrabold">
+                    N
+                  </div>
+                  <div>
+                    <div className="font-semibold leading-5">Notik Offerwall</div>
+                    <div className="text-xs text-white/50 leading-4">
+                      Complete offers and earn coins
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeNotik}
+                  className="rounded-xl bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-sm hover:bg-white/[0.09] transition"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* body */}
+              <div className="relative h-[calc(82vh-56px)] sm:h-[calc(86vh-56px)]">
+                {notikLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="rounded-2xl bg-black/50 ring-1 ring-white/10 px-5 py-4 text-sm text-white/80">
+                      Loading Notik...
+                    </div>
+                  </div>
+                )}
+
+                {notikUrl ? (
+                  <iframe
+                    src={notikUrl}
+                    className="absolute inset-0 w-full h-full"
+                    style={{ border: 0 }}
+                    allow="clipboard-write; fullscreen"
+                    onLoad={() => setNotikLoading(false)}
+                  />
+                ) : (
+                  !notikLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                      <div className="max-w-md rounded-2xl bg-black/50 ring-1 ring-white/10 p-5">
+                        <div className="font-semibold">Notik could not be opened</div>
+                        <div className="mt-2 text-sm text-white/60">
+                          Check /api/offerwall/notik output and Vercel envs. Then try again.
+                        </div>
+                        <div className="mt-4 flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={openNotik}
+                            className="rounded-xl bg-white/[0.06] ring-1 ring-white/10 px-4 py-2 text-sm hover:bg-white/[0.09] transition"
+                          >
+                            Retry
+                          </button>
+                          <button
+                            type="button"
+                            onClick={closeNotik}
+                            className="rounded-xl bg-white/[0.06] ring-1 ring-white/10 px-4 py-2 text-sm hover:bg-white/[0.09] transition"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 px-6 lg:px-10 py-10">
         <div className="mx-auto w-full max-w-7xl">
+          {/* header */}
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">Earn</h1>
             <p className="mt-1 text-sm text-white/60">
@@ -136,7 +265,7 @@ export default function EarnPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* NOTIK */}
+              {/* NOTIK (en başta) */}
               <div
                 onClick={openNotik}
                 className="
@@ -149,11 +278,13 @@ export default function EarnPage() {
                 "
               >
                 <div className="h-[3px] w-full rounded-full bg-indigo-400/80" />
+
                 <div className="mt-3">
                   <span className="rounded-full bg-indigo-400/10 text-indigo-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-indigo-400/25">
                     NEW
                   </span>
                 </div>
+
                 <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
                   <div className="relative h-20 w-full flex items-center justify-center">
                     <span className="text-black font-extrabold tracking-tight">
@@ -161,6 +292,7 @@ export default function EarnPage() {
                     </span>
                   </div>
                 </div>
+
                 <div className="mt-3 text-xs text-white/50">
                   Complete offers and earn coins.
                 </div>
@@ -179,11 +311,13 @@ export default function EarnPage() {
                 "
               >
                 <div className="h-[3px] w-full rounded-full bg-sky-400/80" />
+
                 <div className="mt-3">
                   <span className="rounded-full bg-sky-400/10 text-sky-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-sky-400/25">
                     NEW
                   </span>
                 </div>
+
                 <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
                   <div className="relative h-20 w-full flex items-center justify-center">
                     <span className="text-black font-extrabold tracking-tight">
@@ -191,6 +325,7 @@ export default function EarnPage() {
                     </span>
                   </div>
                 </div>
+
                 <div className="mt-3 text-xs text-white/50">
                   Complete offers and earn coins.
                 </div>
@@ -209,11 +344,13 @@ export default function EarnPage() {
                 "
               >
                 <div className="h-[3px] w-full rounded-full bg-emerald-400/80" />
+
                 <div className="mt-3">
                   <span className="rounded-full bg-emerald-400/10 text-emerald-200 px-2.5 py-1 text-[10px] font-semibold ring-1 ring-emerald-400/25">
                     NEW
                   </span>
                 </div>
+
                 <div className="mt-4 rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden">
                   <div className="relative h-20 w-full">
                     <Image
@@ -225,11 +362,13 @@ export default function EarnPage() {
                     />
                   </div>
                 </div>
+
                 <div className="mt-3 text-xs text-white/50">
                   Complete offers and earn coins.
                 </div>
               </div>
 
+              {/* Other providers */}
               {providers.map((p) => (
                 <div
                   key={p.slug}
