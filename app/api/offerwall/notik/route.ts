@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const rawUserId = searchParams.get("user_id"); // supabase uuid
+    const rawUserId = searchParams.get("user_id"); // supabase uuid bekliyoruz
 
     if (!rawUserId) {
       return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
@@ -22,23 +22,24 @@ export async function GET(req: Request) {
       );
     }
 
-    // ✅ UUID -> dashsiz 32 hex
-    const uuidNoDash = rawUserId.replace(/-/g, "").toLowerCase();
+    // ✅ Notik uyumlu user_id: UUID -> dashsiz (32 hex)
+    const notikUserId = rawUserId.replace(/-/g, "").toLowerCase();
 
-    // ekstra güvenlik
-    if (!/^[0-9a-f]{32}$/.test(uuidNoDash)) {
+    // güvenlik (UUID değilse hata ver)
+    if (!/^[0-9a-f]{32}$/.test(notikUserId)) {
       return NextResponse.json(
         { error: "Bad user_id format (expected UUID)" },
         { status: 400 }
       );
     }
 
+    // ✅ Dokümandaki iframe src formatı ile birebir
     const url =
       `https://notik.me/coins` +
       `?api_key=${encodeURIComponent(apiKey)}` +
       `&pub_id=${encodeURIComponent(pubId)}` +
       `&app_id=${encodeURIComponent(appId)}` +
-      `&user_id=${encodeURIComponent(uuidNoDash)}`;
+      `&user_id=${encodeURIComponent(notikUserId)}`;
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (e: any) {
