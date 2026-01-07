@@ -170,7 +170,6 @@ export default function EarnPage() {
                 <span className="text-[10px] text-white/20 italic tracking-tighter">Mert*** +500 C</span>
                 <span className="text-[10px] text-white/20 italic tracking-tighter">Can*** +1200 C</span>
                 <span className="hidden sm:block text-[10px] text-white/20 italic tracking-tighter">Heidi*** +45 C</span>
-                <meta name="google-adsense-account" content="ca-pub-8882655723474087">
             </div>
         </div>
 
